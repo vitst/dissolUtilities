@@ -762,6 +762,5 @@ $(WM_PROJECT_DIR)/src/triSurface/lnInclude/surfacePatchList.H \
 $(WM_PROJECT_DIR)/src/triSurface/lnInclude/surfacePatch.H \
 $(WM_PROJECT_DIR)/src/OpenFOAM/lnInclude/triFaceList.H \
 $(WM_PROJECT_DIR)/src/meshTools/lnInclude/meshSearch.H \
-$(WM_PROJECT_DIR)/src/OSspecific/POSIX/lnInclude/clockTime.H \
 
 

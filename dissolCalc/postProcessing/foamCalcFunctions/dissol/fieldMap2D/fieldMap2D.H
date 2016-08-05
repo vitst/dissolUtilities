@@ -76,16 +76,22 @@ class fieldMap2D
         void operator=(const fieldMap2D&);
         
         word processingType_;
-        label N_, M_, K_;
+        label N_, M_, K_;   // N - major, M - lateral
         label N1_, M1_, K1_;
         
         int N1M1;
         
-        scalar dx, dy;
-
-        scalar maxPosX, minPosX; // maximum and minimum in X direction
-        scalar maxPosY, minPosY; // maximum and minimum in Y direction
-        scalar maxPosZ, minPosZ; // maximum and minimum in Z direction
+        int expNI;  //   expected number of intersections
+        
+        //scalar maxPosX, minPosX; // maximum and minimum in X direction
+        //scalar maxPosY, minPosY; // maximum and minimum in Y direction
+        //scalar maxPosZ, minPosZ; // maximum and minimum in Z direction
+        
+        scalar maxPosMajor, minPosMajor;
+        scalar maxPosLateral, minPosLateral;
+        scalar maxPosIntegr, minPosIntegr;
+        
+        scalar dx, dy; // dx - major, dy - lateral
         
         pointField pointsXYonsurface;
         std::map<label, label> oppositeWallUniform;

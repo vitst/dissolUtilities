@@ -48,18 +48,18 @@ SourceFiles
 
 namespace Foam
 {
-    namespace calcTypes
-    {
-        defineTypeNameAndDebug(fieldMap2D, 0);
-        addToRunTimeSelectionTable(calcType, fieldMap2D, dictionary);
-    }
+  namespace calcTypes
+  {
+    defineTypeNameAndDebug(fieldMap2D, 0);
+    addToRunTimeSelectionTable(calcType, fieldMap2D, dictionary);
+  }
 }
 
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
 Foam::calcTypes::fieldMap2D::fieldMap2D()
 :
-    calcType()
+  calcType()
 {}
 
 // * * * * * * * * * * * * * * * * Destructor  * * * * * * * * * * * * * * * //
@@ -75,16 +75,95 @@ void Foam::calcTypes::fieldMap2D::init()
   argList::validArgs.append("processingType");
   argList::validArgs.append("N");
   argList::validArgs.append("M");
-  argList::validArgs.append("K");
 }
 
 void Foam::calcTypes::fieldMap2D::preCalc
 (
-    const argList& args,
-    const Time& runTime,
-    const fvMesh& mesh
+  const argList& args,
+  const Time& runTime,
+  const fvMesh& mesh
 )
 {
+  
+  const word dictName("fieldMap2Ddict");
+  IOdictionary dict
+  (
+    IOobject
+    (
+      dictName,
+      runTime.system(),
+      mesh,
+      IOobject::MUST_READ,
+      IOobject::NO_WRITE
+    )
+  );
+
+  point minPoint;
+  if( !dict.readIfPresent<point>("minPoint", minPoint) )
+  {
+    SeriousErrorIn("preCalc")
+          << "There is no minPoint parameter in fieldMap2Ddict dictionary"
+          << exit(FatalError);
+  }
+  point maxPoint;
+  if( !dict.readIfPresent<point>("maxPoint", maxPoint) )
+  {
+    SeriousErrorIn("preCalc")
+          << "There is no maxPoint parameter in fieldMap2Ddict dictionary"
+          << exit(FatalError);
+  }
+
+  int integrationDir;
+  if( !dict.readIfPresent<int>("integrationDirection", integrationDir) )
+  {
+    SeriousErrorIn("preCalc")
+          << "There is no integrationDirection parameter "
+             "in fieldMap2Ddict dictionary"
+          << exit(FatalError);
+  }
+  int flowDir;
+  if( !dict.readIfPresent<int>("flowDirection", flowDir) )
+  {
+    SeriousErrorIn("preCalc")
+          << "There is no flowDirection parameter "
+             "in fieldMap2Ddict dictionary"
+          << exit(FatalError);
+  }
+
+  int expectedNumberOfIntersections;
+  if
+  (
+    !dict.readIfPresent<int>
+          (
+            "expectedNumberOfIntersections", 
+            expectedNumberOfIntersections
+          ) 
+  )
+  {
+    SeriousErrorIn("preCalc")
+          << "There is no expectedNumberOfIntersections parameter "
+             "in fieldMap2Ddict dictionary"
+          << exit(FatalError);
+  }
+  expNI = expectedNumberOfIntersections;
+  
+  int numberOfIntegrationPoints;
+  if
+  (
+    !dict.readIfPresent<int>
+          (
+            "numberOfIntegrationPoints",
+            numberOfIntegrationPoints
+          ) 
+  )
+  {
+    SeriousErrorIn("preCalc")
+          << "There is no numberOfIntegrationPoints parameter "
+             "in fieldMap2Ddict dictionary"
+          << exit(FatalError);
+  }
+  
+  
   #ifdef FOAM_DEV
     const word& processingType = args.additionalArgs()[1];
     const word& Nword = args.additionalArgs()[2];
@@ -93,20 +172,18 @@ void Foam::calcTypes::fieldMap2D::preCalc
 
     N_ = std::atoi( Nword.c_str() );
     M_ = std::atoi( Mword.c_str() );
-    K_ = std::atoi( Mword.c_str() );
     Info << "FOAM_DEV true: "<< FOAM_DEV <<nl;
   #else
     const word processingType = args[2];
     N_ = std::atoi( args[3].c_str() );
     M_ = std::atoi( args[4].c_str() );
-    K_ = std::atoi( args[5].c_str() );
     Info << "FOAM_DEV false: " <<nl;
   #endif
   processingType_ = const_cast<word&>(processingType);
   
   N1_ = N_+1;
   M1_ = M_+1;
-  K1_ = K_+1;
+  K1_ = numberOfIntegrationPoints+1;
   
   N1M1 = N1_*M1_;
 
@@ -127,7 +204,8 @@ void Foam::calcTypes::fieldMap2D::preCalc
           Foam::IOobject::MUST_READ
       )
   );
-  if( timeTmp.timeName()!="0" ){
+  if( timeTmp.timeName()!="0" )
+  {
     SeriousErrorIn("fieldOperations::getInletAreaT0")
             <<"There is no 0 time directory. Check your decomposition as well!"<<nl
             <<"TimeTmp: "<< timeTmp.timeName()<<nl
@@ -137,25 +215,30 @@ void Foam::calcTypes::fieldMap2D::preCalc
   Info << "Calculating the max and min coordinates"<<nl;
   const pointField &allPoints = meshTmp.points();
   
-  maxPosX = max( allPoints.component(vector::X) );
-  maxPosY = max( allPoints.component(vector::Y) );
-  maxPosZ = max( allPoints.component(vector::Z) );
+  //minPosX = min( allPoints.component(vector::X) );
+  //minPosY = min( allPoints.component(vector::Y) );
+  //minPosZ = min( allPoints.component(vector::Z) );
   
-  minPosX = min( allPoints.component(vector::X) );
-  minPosY = min( allPoints.component(vector::Y) );
-  minPosZ = min( allPoints.component(vector::Z) );
+  int lateralDir = 3 - (integrationDir + flowDir);
   
+  minPosMajor   = minPoint.component(flowDir);
+  minPosLateral = minPoint.component(lateralDir);
+  minPosIntegr  = minPoint.component(integrationDir);
+  
+  maxPosMajor   = maxPoint.component(flowDir);
+  maxPosLateral = maxPoint.component(lateralDir);
+  maxPosIntegr  = maxPoint.component(integrationDir);
   
   // z becomes x; x becomes y
-  dx = (maxPosZ - minPosZ) / static_cast<scalar>(N_);
-  dy = (maxPosX - minPosX) / static_cast<scalar>(M_);
+  dx = (maxPosMajor - minPosMajor) / static_cast<scalar>(N_);
+  dy = (maxPosLateral - minPosLateral) / static_cast<scalar>(M_);
   
   // calculate the size of the current pattern being not bigger then 10^7
-  thisTimeSize = min(N1_*M1_, maxNumProcPoints);
+  thisTimeSize = min(N1M1, maxNumProcPoints);
   curNum = 0;
   curEnd = thisTimeSize;
   
-  totNumLoop = (N1_*M1_-1) / maxNumProcPoints + 1;
+  totNumLoop = (N1M1-1) / maxNumProcPoints + 1;
 }
 
 
@@ -193,6 +276,8 @@ void Foam::calcTypes::fieldMap2D::calc
   else
     FatalError<<"Unable to process "<<processingType_<<nl<<nl<<exit(FatalError);
   
+  write_temp(mesh, runTime);
+  /*
   for(int cI=0; cI<totNumLoop; cI++){
     
     curNum = cI;
@@ -243,6 +328,7 @@ void Foam::calcTypes::fieldMap2D::calc
       //FatalError<<"Unable to process "<<processingType_<<nl<<nl<<exit(FatalError);
     }
   }
+  */
 }
 
 scalar Foam::calcTypes::fieldMap2D::primitive_simpson_integration
@@ -408,6 +494,90 @@ void Foam::calcTypes::fieldMap2D::write_temp
   const Time& runTime
 )
 {
+  fileName current_dissolCalc_dir;
+  current_dissolCalc_dir = "postProcessing/dissolCalc" / runTime.timeName();
+  if ( !isDir(current_dissolCalc_dir) ) mkDir(current_dissolCalc_dir);
+  
+  fileName current_file_path;
+  current_file_path = "postProcessing/dissolCalc" / runTime.timeName() / "h";
+  
+  ios_base::openmode mode = (curNum==0) ? ios_base::out|ios_base::trunc : ios_base::out|ios_base::app;  
+  OFstreamMod apertureMapFile( current_file_path, mode);
+  
+  if( curNum==0 ){
+    apertureMapFile << N_ << "   " << M_ << "   " << runTime.value() 
+            << "   " << dx << "   " << dy << endl;
+  }
+  
+  // for gypsum case
+  // find intersection with lower wall
+  const pointField &allPoints = mesh.points();
+  maxPosX = max( allPoints.component(vector::X) );
+  minPosX = min( allPoints.component(vector::X) );
+  maxPosY = max( allPoints.component(vector::Y) );
+  minPosY = min( allPoints.component(vector::Y) );
+  maxPosZ = 1.0;
+  minPosZ = min( allPoints.component(vector::Z) );
+  
+  // triangulation
+  label wallID = mesh.boundaryMesh().findPatchID("solubleWall");
+  labelHashSet includePatches(1);
+  includePatches.insert(wallID);
+  
+  triSurface wallTriSurface
+  (
+    triSurfaceTools::triangulate( mesh.boundaryMesh(), includePatches )
+  );
+  
+  // intersection
+  const triSurfaceSearch querySurf(wallTriSurface);
+  const indexedOctree<treeDataTriSurface>& tree = querySurf.tree();
+  
+  scalar curX = 0.0;
+  scalar curY = 0.0;
+  
+  dx = (maxPosX - minPosX) / static_cast<scalar>(N_);
+  dy = (maxPosY - minPosY) / static_cast<scalar>(M_);
+  
+  
+  // N+1 and M+1 because we need points at x=minPosX and x=maxPosX
+  int count = 0;
+  for(int ijk=0; ijk<M1_*N1_; ijk++)
+  {
+    int totIJK = ijk;
+    label i = totIJK / M1_;
+    label j = totIJK % M1_;
+    curX = minPosX + i*dx;
+    curY = minPosY + j*dy;
+      
+    scalar eps=1e-2;
+    while(curX >= maxPosX ) curX -= eps;
+    while(curX <= minPosX ) curX += eps;
+    while(curY >= maxPosY ) curY -= eps;
+    while(curY <= minPosY ) curY += eps;
+    
+    point searchStart(curX, curY, maxPosZ);
+    point searchEnd  (curX, curY, minPosZ-1.0);
+
+    point hitPoint(0.0, 0.0, 0.0);
+
+    pointIndexHit pHit = tree.findLine(searchStart, searchEnd);
+    if ( pHit.hit() )
+    {
+      hitPoint = pHit.hitPoint();
+    }
+  
+    scalar dist = mag( hitPoint - searchStart );
+    apertureMapFile << dist << "  ";
+
+    count++;
+    if(count>=NUMBER_OF_COLUMNS){ 
+      apertureMapFile <<"\n";
+      count=0;
+    }
+  }
+  
+  
 }
 
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
