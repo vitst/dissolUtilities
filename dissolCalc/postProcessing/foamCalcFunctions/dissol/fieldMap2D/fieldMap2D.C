@@ -98,6 +98,13 @@ void Foam::calcTypes::fieldMap2D::preCalc
     )
   );
 
+  if( !dict.readIfPresent<word>("patchName", patchName) )
+  {
+    SeriousErrorIn("preCalc")
+          << "There is no patchName parameter in fieldMap2Ddict dictionary"
+          << exit(FatalError);
+  }
+  
   point minPoint;
   if( !dict.readIfPresent<point>("minPoint", minPoint) )
   {
@@ -121,6 +128,8 @@ void Foam::calcTypes::fieldMap2D::preCalc
              "in fieldMap2Ddict dictionary"
           << exit(FatalError);
   }
+  intDir = integrationDir;
+  
   int flowDir;
   if( !dict.readIfPresent<int>("flowDirection", flowDir) )
   {
@@ -129,6 +138,7 @@ void Foam::calcTypes::fieldMap2D::preCalc
              "in fieldMap2Ddict dictionary"
           << exit(FatalError);
   }
+  majDir = flowDir;
 
   int expectedNumberOfIntersections;
   if
@@ -180,14 +190,31 @@ void Foam::calcTypes::fieldMap2D::preCalc
     Info << "FOAM_DEV false: " <<nl;
   #endif
   processingType_ = const_cast<word&>(processingType);
+  latDir = 3 - (intDir + majDir);
   
+  Info<<"* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *"
+          <<nl
+          <<"Post-processing parameters:"<<nl
+          <<"patchName:                 "<< patchName<<nl
+          <<"minPoint:                  "<< minPoint<<nl
+          <<"maxPoint:                  "<< maxPoint<<nl
+          <<"major direction:           "<< majDir<<nl
+          <<"lateral direction:         "<< latDir<<nl
+          <<"integration direction:     "<< intDir<<nl
+          <<"number of intersections:   "<<expNI<<nl
+          <<"number of integration points: "<< numberOfIntegrationPoints
+          <<endl;
+  
+          
   N1_ = N_+1;
   M1_ = M_+1;
+  K_  = numberOfIntegrationPoints;
   K1_ = numberOfIntegrationPoints+1;
   
   N1M1 = N1_*M1_;
 
   // need temporary arguments in order to add a 0 time directory
+  /*
   argList argsTmp = args;
   argsTmp.setOption("time", "0");
   Foam::Time timeTmp(Foam::Time::controlDictName, argsTmp);
@@ -211,27 +238,25 @@ void Foam::calcTypes::fieldMap2D::preCalc
             <<"TimeTmp: "<< timeTmp.timeName()<<nl
             <<exit(FatalError);
   }
+  */
   
-  Info << "Calculating the max and min coordinates"<<nl;
-  const pointField &allPoints = meshTmp.points();
-  
+  //Info << "Calculating the max and min coordinates"<<nl;
+  //const pointField &allPoints = meshTmp.points();
   //minPosX = min( allPoints.component(vector::X) );
   //minPosY = min( allPoints.component(vector::Y) );
   //minPosZ = min( allPoints.component(vector::Z) );
   
-  int lateralDir = 3 - (integrationDir + flowDir);
+  minPosMaj = minPoint.component(majDir);
+  minPosLat = minPoint.component(latDir);
+  minPosInt = minPoint.component(intDir);
   
-  minPosMajor   = minPoint.component(flowDir);
-  minPosLateral = minPoint.component(lateralDir);
-  minPosIntegr  = minPoint.component(integrationDir);
-  
-  maxPosMajor   = maxPoint.component(flowDir);
-  maxPosLateral = maxPoint.component(lateralDir);
-  maxPosIntegr  = maxPoint.component(integrationDir);
+  maxPosMaj = maxPoint.component(majDir);
+  maxPosLat = maxPoint.component(latDir);
+  maxPosInt = maxPoint.component(intDir);
   
   // z becomes x; x becomes y
-  dx = (maxPosMajor - minPosMajor) / static_cast<scalar>(N_);
-  dy = (maxPosLateral - minPosLateral) / static_cast<scalar>(M_);
+  dx = (maxPosMaj - minPosMaj) / static_cast<scalar>(N_);
+  dy = (maxPosLat - minPosLat) / static_cast<scalar>(M_);
   
   // calculate the size of the current pattern being not bigger then 10^7
   thisTimeSize = min(N1M1, maxNumProcPoints);
@@ -245,12 +270,11 @@ void Foam::calcTypes::fieldMap2D::preCalc
 // TODO make it more general
 void Foam::calcTypes::fieldMap2D::calc
 (
-    const argList& args,
-    const Time& runTime,
-    const fvMesh& mesh
+  const argList& args,
+  const Time& runTime,
+  const fvMesh& mesh
 )
 {
-  Info << "Find the points on the surface"<<nl;
   // coordinates of points on the surface of the fracture walls
   //memInfo mf;
   
@@ -276,10 +300,8 @@ void Foam::calcTypes::fieldMap2D::calc
   else
     FatalError<<"Unable to process "<<processingType_<<nl<<nl<<exit(FatalError);
   
-  write_temp(mesh, runTime);
-  /*
-  for(int cI=0; cI<totNumLoop; cI++){
-    
+  for(int cI=0; cI<totNumLoop; cI++)
+  {
     curNum = cI;
     curBlock = thisTimeSize * curNum;
     
@@ -288,10 +310,12 @@ void Foam::calcTypes::fieldMap2D::calc
       sizeAA = N1M1 - (totNumLoop-1)*thisTimeSize;
     }
 
+    Info << "Find the points on the surface"<<nl;
     pointsXYonsurface.clear();
-    pointsXYonsurface.setSize( 2.0 * sizeAA );
+    pointsXYonsurface.setSize( expNI * sizeAA );
     build_surface_points( mesh );
-
+    Info << "build_surface_points done"<<nl;
+    
     fileName current_dissolCalc_dir;
     current_dissolCalc_dir = "postProcessing/dissolCalc" / runTime.timeName();
     if ( !isDir(current_dissolCalc_dir) ) mkDir(current_dissolCalc_dir);
@@ -299,10 +323,10 @@ void Foam::calcTypes::fieldMap2D::calc
     if(processingType_ == "all"){
       write_all(mesh, runTime);
     }
-    if(processingType_ == "surf"){
+    else if(processingType_ == "surf"){
       write_surf(mesh, runTime);
     }
-    if(processingType_ == "int"){
+    else if(processingType_ == "int"){
       write_int(mesh, runTime);
     }
     else if(processingType_ == "h"){
@@ -310,10 +334,6 @@ void Foam::calcTypes::fieldMap2D::calc
     }
     else if(processingType_ == "U"){
       write_q(mesh, runTime);
-    }
-    else if(processingType_ == "p"){
-      //write_p(mesh, runTime);
-      //FatalError<<"p processing is not implemented yet "<<nl<<nl<<exit(FatalError);
     }
     else if(processingType_ == "C"){
       write_Ccup(mesh, runTime);
@@ -325,10 +345,9 @@ void Foam::calcTypes::fieldMap2D::calc
       write_temp(mesh, runTime);
     }
     else{
-      //FatalError<<"Unable to process "<<processingType_<<nl<<nl<<exit(FatalError);
+      FatalError<<"Unable to process "<<processingType_<<nl<<nl<<exit(FatalError);
     }
   }
-  */
 }
 
 scalar Foam::calcTypes::fieldMap2D::primitive_simpson_integration
@@ -399,18 +418,21 @@ void Foam::calcTypes::fieldMap2D::build_surface_points
   const fvMesh& mesh
 )
 {
-  const pointField &allPoints = mesh.points();
-  maxPosY = max( allPoints.component(vector::Y) );
-  minPosY = min( allPoints.component(vector::Y) );
-  
-  oppositeWallUniform.clear();
-  
   // triangulation
   // @TODO in case of parallel calculations see surfaceMeshTriangulate.C
   // @TODO add the error handling for "walls"
-  label wallID = mesh.boundaryMesh().findPatchID("walls");
+  label patchID = mesh.boundaryMesh().findPatchID(patchName);
+  
+  if(patchID==-1)
+  {
+    SeriousErrorIn("build_surface_points")
+            <<"There is no "
+            << patchName
+            << exit(FatalError);
+  }
+  
   labelHashSet includePatches(1);
-  includePatches.insert(wallID);
+  includePatches.insert(patchID);
   
   triSurface wallTriSurface
   (
@@ -421,8 +443,14 @@ void Foam::calcTypes::fieldMap2D::build_surface_points
   const triSurfaceSearch querySurf(wallTriSurface);
   const indexedOctree<treeDataTriSurface>& tree = querySurf.tree();
   
-  scalar curX = 0.0;
-  scalar curZ = 0.0;
+  scalar curMaj = 0.0;
+  scalar curLat = 0.0;
+  
+  const pointField &localPoints = mesh.boundaryMesh()[patchID].localPoints();
+  scalar maxMaj = max( localPoints.component(majDir) );
+  scalar minMaj = min( localPoints.component(majDir) );
+  scalar maxLat = max( localPoints.component(latDir) );
+  scalar minLat = min( localPoints.component(latDir) );
   
   // N+1 and M+1 because we need points at x=minPosX and x=maxPosX
   for(int ijk=0; ijk<sizeAA; ijk++)
@@ -430,57 +458,60 @@ void Foam::calcTypes::fieldMap2D::build_surface_points
     int totIJK = ijk + curNum * thisTimeSize;
     label i = totIJK / M1_;
     label j = totIJK % M1_;
-    curZ = minPosZ + i*dx;
-    curX = minPosX + j*dy;
+    curMaj = minPosMaj + i*dx;
+    curLat = minPosLat + j*dy;
     label ind = ijk;
       
-    scalar eps=1e-1;
-    point searchStart(curX, 0.0, curZ);
-    while(searchStart.x() >= maxPosX ) searchStart.x() = searchStart.x() - eps;
-    while(searchStart.x() <= minPosX ) searchStart.x() = searchStart.x() + eps;
-    while(searchStart.z() >= maxPosZ ) searchStart.z() = searchStart.z() - eps;
-    while(searchStart.z() <= minPosZ ) searchStart.z() = searchStart.z() + eps;
+    scalar eps=1e-2;
+    point searchStart;
+    searchStart.component(majDir) = curMaj;
+    searchStart.component(latDir) = curLat;
+    searchStart.component(intDir) = minPosInt;
+    
+    while(searchStart.component(majDir) >= maxMaj ) 
+      searchStart.component(majDir) -= eps;
+    while(searchStart.component(majDir) <= minMaj ) 
+      searchStart.component(majDir) += eps;
+    while(searchStart.component(latDir) >= maxLat ) 
+      searchStart.component(latDir) -= eps;
+    while(searchStart.component(latDir) <= minLat ) 
+      searchStart.component(latDir) += eps;
+    
     point searchEnd = searchStart;
-    searchStart.y() = maxPosY+1.0;
+    searchEnd.component(intDir) = maxPosInt +
+            mag(maxPosInt-minPosInt)/(maxPosInt-minPosInt);
 
     point hitPoint(0.0, 0.0, 0.0);
-
-    label posWallLab = 2*ind;
-    label negWallLab = 2*ind+1;
-
-    // @TODO description
-    bool pm = false, mp = false;
-
+    
     pointIndexHit pHit = tree.findLine(searchStart, searchEnd);
+    
     if ( pHit.hit() )
     {
       hitPoint = pHit.hitPoint();
-      pm = true;
     }
-
-    pointsXYonsurface[posWallLab] = hitPoint;
-
-    // search symmetric point
-    searchStart.y() = minPosY-1.0;
-    pHit = tree.findLine(searchStart, searchEnd);
-    if ( pHit.hit() )
+    
+    label hitWallLabel = expNI*ind;
+    
+    pointsXYonsurface[hitWallLabel] = hitPoint;
+    
+    if(expNI>1)
     {
-      hitPoint = pHit.hitPoint();
-      mp = true;
+      // search for second intersection
+      searchStart.component(intDir) = hitPoint.component(intDir) + eps;
+      pHit = tree.findLine(searchStart, searchEnd);
+      label secondHitWallLabel = expNI * ind + 1;
+      if ( pHit.hit() )
+      {
+        pointsXYonsurface[secondHitWallLabel] = pHit.hitPoint();
+      }
+      else
+      {
+        pointsXYonsurface[hitWallLabel] = point::zero;
+        pointsXYonsurface[secondHitWallLabel] = point::zero;
+      }
+
     }
 
-    pointsXYonsurface[negWallLab] = hitPoint;
-
-    if(pm && !mp){
-      pointsXYonsurface[negWallLab] = pointsXYonsurface[posWallLab];
-      pointsXYonsurface[negWallLab].y() *= -1.0;
-    }
-    else if(!pm && mp){
-      pointsXYonsurface[posWallLab] = pointsXYonsurface[negWallLab];
-      pointsXYonsurface[posWallLab].y() *= -1.0;
-    }
-
-    oppositeWallUniform[posWallLab] = negWallLab;
   }
 }
 
@@ -512,15 +543,16 @@ void Foam::calcTypes::fieldMap2D::write_temp
   // for gypsum case
   // find intersection with lower wall
   const pointField &allPoints = mesh.points();
-  maxPosX = max( allPoints.component(vector::X) );
-  minPosX = min( allPoints.component(vector::X) );
-  maxPosY = max( allPoints.component(vector::Y) );
-  minPosY = min( allPoints.component(vector::Y) );
-  maxPosZ = 1.0;
-  minPosZ = min( allPoints.component(vector::Z) );
+  scalar maxPosX = max( allPoints.component(vector::X) );
+  scalar minPosX = min( allPoints.component(vector::X) );
+  scalar maxPosY = max( allPoints.component(vector::Y) );
+  scalar minPosY = min( allPoints.component(vector::Y) );
+  scalar maxPosZ = 1.0;
+  scalar minPosZ = min( allPoints.component(vector::Z) );
   
   // triangulation
   label wallID = mesh.boundaryMesh().findPatchID("solubleWall");
+  
   labelHashSet includePatches(1);
   includePatches.insert(wallID);
   
@@ -588,6 +620,7 @@ void Foam::calcTypes::fieldMap2D::write_csurf
   const Time& runTime
 )
 {
+  /*
   fileName current_file_path;
   current_file_path = "postProcessing/dissolCalc" / runTime.timeName() / "csurf";
   OFstream aFile( current_file_path );
@@ -635,6 +668,7 @@ void Foam::calcTypes::fieldMap2D::write_csurf
       count=0;
     }
   }  
+   */
 }
 
 
@@ -647,20 +681,38 @@ void Foam::calcTypes::fieldMap2D::write_h
   fileName current_file_path;
   current_file_path = "postProcessing/dissolCalc" / runTime.timeName() / "h";
   
-  ios_base::openmode mode = (curNum==0) ? ios_base::out|ios_base::trunc : ios_base::out|ios_base::app;  
+  ios_base::openmode mode = (curNum==0) ? 
+    ios_base::out|ios_base::trunc 
+          : 
+    ios_base::out|ios_base::app;
+  
   OFstreamMod apertureMapFile( current_file_path, mode);
   
-  if( curNum==0 ){
+  if( curNum==0 )
+  {
     apertureMapFile << N_ << "   " << M_ << "   " << runTime.value() 
             << "   " << dx << "   " << dy << endl;
   }
 
   int count = 0;
-  for (std::map<int,int>::const_iterator it  = oppositeWallUniform.begin(); 
-                                   it != oppositeWallUniform.end(); ++it ){
-    scalar dist = mag( pointsXYonsurface[it->first] - pointsXYonsurface[it->second] );
-    apertureMapFile << dist << "  ";
-
+  int i = 0;
+  while (i<pointsXYonsurface.size() )
+  {
+    point first = pointsXYonsurface[i];
+    point second = first;
+    
+    if(expNI == 1)
+    {
+      second.component(intDir) = minPosInt;
+    }
+    else
+    {
+      second = pointsXYonsurface[i+1];
+    }
+    
+    apertureMapFile << mag( first - second ) << "  ";
+    
+    i+=expNI;
     count++;
     if(count>=NUMBER_OF_COLUMNS){ 
       apertureMapFile <<"\n";
@@ -676,6 +728,7 @@ void Foam::calcTypes::fieldMap2D::write_q
   const Time& runTime
 )
 {
+  /*
   typedef GeometricField<vector, fvPatchField, volMesh> fieldU;
 
   IOobject header
@@ -757,15 +810,7 @@ void Foam::calcTypes::fieldMap2D::write_q
   else{
     FatalError<<"There is no U field"<<nl<<nl<<exit(FatalError);
   }
-}
-
-void Foam::calcTypes::fieldMap2D::write_p
-(
-  const fvMesh& mesh,
-  const Time& runTime
-)
-{
-  Info<< "Not implemented yet"<<nl;
+   */
 }
 
 void Foam::calcTypes::fieldMap2D::write_Ccup
@@ -774,6 +819,7 @@ void Foam::calcTypes::fieldMap2D::write_Ccup
   const Time& runTime
 )
 {
+  /*
   typedef GeometricField<vector, fvPatchField, volMesh> fieldU;
   typedef GeometricField<scalar, fvPatchField, volMesh> fieldC;
 
@@ -874,6 +920,7 @@ void Foam::calcTypes::fieldMap2D::write_Ccup
   else{
     FatalError<<"There is no U and C field"<<nl<<nl<<exit(FatalError);
   }
+   */
 }
 
 
@@ -884,6 +931,7 @@ void Foam::calcTypes::fieldMap2D::write_surf
   const Time& runTime
 )
 {
+  /*
   typedef GeometricField<scalar, fvPatchField, volMesh> fieldC;
 
   IOobject headerC
@@ -958,6 +1006,7 @@ void Foam::calcTypes::fieldMap2D::write_surf
   else{
     FatalError<<"There is no C field"<<nl<<nl<<exit(FatalError);
   }
+   */
 }
 
 
@@ -967,6 +1016,7 @@ void Foam::calcTypes::fieldMap2D::write_int
   const Time& runTime
 )
 {
+  /*
   typedef GeometricField<vector, fvPatchField, volMesh> fieldU;
   typedef GeometricField<scalar, fvPatchField, volMesh> fieldC;
 
@@ -1100,6 +1150,7 @@ void Foam::calcTypes::fieldMap2D::write_int
   else{
     FatalError<<"There is no U and C field"<<nl<<nl<<exit(FatalError);
   }
+   */
 }
 
 
@@ -1171,13 +1222,22 @@ void Foam::calcTypes::fieldMap2D::write_all
     meshSearch searchEngine(mesh);
         
     int count = 0;
-    for(
-          std::map<int,int>::iterator it  = oppositeWallUniform.begin();
-                                      it != oppositeWallUniform.end();
-                                    ++it 
-       )
+    int iSurf = 0;
+    while (iSurf<pointsXYonsurface.size() )
     {
-      vector dirc =  pointsXYonsurface[it->first] - pointsXYonsurface[it->second];
+      point first = pointsXYonsurface[iSurf];
+      point second = first;
+
+      if(expNI == 1)
+      {
+        second.component(intDir) = minPosInt;
+      }
+      else
+      {
+        second = pointsXYonsurface[iSurf+1];
+      }
+      
+      vector dirc =  first - second;
       scalar dist = mag( dirc );
       
       scalar csurf = 0.0;
@@ -1192,30 +1252,32 @@ void Foam::calcTypes::fieldMap2D::write_all
         scalarField Uy(K1_);
         scalarField UCx(K1_);
         scalarField UCy(K1_);
-
+        
         vector dr = 1.0 / static_cast<scalar>(K_) * dirc;
 
         for(int i=0; i<K1_; i++)
         {
-          point samp_point = pointsXYonsurface[it->second] + i*dr;
+          point samp_point = second + i*dr;
           label cellI = searchEngine.findCell( samp_point );
-          if (cellI==-1){
+          if (cellI==-1)
+          {
             cellI = searchEngine.findNearestCell( samp_point );
           }
           label faceI = -1;
 
           vector interp_fieldU = interpolatorU->interpolate(samp_point, cellI, faceI);
-          if(i==0 || i==K1_-1){
+          if(i==0 || i==K_)
+          {
             interp_fieldU = vector::zero;
           }
           
-          variable[i] = samp_point.y();
-          Ux[i] = interp_fieldU.z();
-          Uy[i] = interp_fieldU.x();
+          variable[i] = samp_point.component(intDir);
+          Ux[i] = interp_fieldU.component(majDir);
+          Uy[i] = interp_fieldU.component(latDir);
           
           scalar interp_fieldC = interpolatorC->interpolate(samp_point, cellI, faceI);
-          UCx[i] = interp_fieldU.z() * interp_fieldC;
-          UCy[i] = interp_fieldU.x() * interp_fieldC;
+          UCx[i] = Ux[i] * interp_fieldC;
+          UCy[i] = Uy[i] * interp_fieldC;
           if(i==0)
           {
             csurf = interp_fieldC;
@@ -1227,16 +1289,18 @@ void Foam::calcTypes::fieldMap2D::write_all
         integratedUCx = primitive_simpson_integration(variable, UCx);
         integratedUCy = primitive_simpson_integration(variable, UCy);
         scalar qSqr = integratedUx*integratedUx+integratedUy*integratedUy;
-        if( qSqr != 0 ){
+        if( qSqr > SMALL )
+        {
           Ccup = std::sqrt( (integratedUCx*integratedUCx+integratedUCy*integratedUCy)/qSqr );
         }
       }
-      int ind = std::distance(oppositeWallUniform.begin(), it);
-      int ind1 = ind + curBlock;
+      
+      int ind1 = iSurf + curBlock;
       int prcnt  = 100 * (ind1    ) / N1M1;
       int prcnt1 = 100 * (ind1 - 1) / N1M1;
-      if( prcnt%1==0 && prcnt!=prcnt1 ){
-      Info<<"\r"<< prcnt << "%  "<<flush;
+      if( prcnt%1==0 && prcnt!=prcnt1 )
+      {
+        Info<<"\r"<< prcnt << "%  "<<flush;
       }
       
       mapXYccup << Ccup << "  ";
@@ -1245,8 +1309,10 @@ void Foam::calcTypes::fieldMap2D::write_all
       mapXYqy << integratedUy << "  ";
       apertureMapFile << dist << "  ";
 
+      iSurf += expNI;
       count++;
-      if(count>=NUMBER_OF_COLUMNS){ 
+      if(count >= NUMBER_OF_COLUMNS)
+      { 
         mapXYccup <<"\n";
         mapXYcsurf <<"\n";
         mapXYqx <<"\n";

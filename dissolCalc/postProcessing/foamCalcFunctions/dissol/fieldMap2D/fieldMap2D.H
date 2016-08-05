@@ -81,21 +81,26 @@ class fieldMap2D
         
         int N1M1;
         
+        word patchName;
+        
         int expNI;  //   expected number of intersections
         
         //scalar maxPosX, minPosX; // maximum and minimum in X direction
         //scalar maxPosY, minPosY; // maximum and minimum in Y direction
         //scalar maxPosZ, minPosZ; // maximum and minimum in Z direction
         
-        scalar maxPosMajor, minPosMajor;
-        scalar maxPosLateral, minPosLateral;
-        scalar maxPosIntegr, minPosIntegr;
+        // directions
+        label majDir, latDir, intDir;
+        
+        scalar maxPosMaj, minPosMaj;
+        scalar maxPosLat, minPosLat;
+        // in case of one surface minPosIntegr is a surface confining 
+        // a reservoir instead of second wall
+        scalar maxPosInt, minPosInt;
         
         scalar dx, dy; // dx - major, dy - lateral
         
         pointField pointsXYonsurface;
-        std::map<label, label> oppositeWallUniform;
-
         
 protected:
 
@@ -152,11 +157,6 @@ protected:
               const Time& runTime
             );
             void write_q
-            (
-              const fvMesh& mesh,
-              const Time& runTime
-            );
-            void write_p
             (
               const fvMesh& mesh,
               const Time& runTime
