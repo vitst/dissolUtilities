@@ -101,13 +101,17 @@ class Experimental(gbm.AbstractBaseGenerator):
 
     # TODO: implement more general resolution calculation
     # TODO: taking into account grading
-    x_res1 = int( Lgap / Lx * x_res )
+    x_res1 = int( 2*Lgap / (Lx+2*Lgap) * x_res )
     y_res1 = y_res
     z_res1 = z_res
 
     x_res2 = x_res - x_res1
     y_res2 = y_res
     z_res2 = z_res
+
+    if x_res1 % 2 > 0:
+      x_res1 -= 1
+    x_res1 = int(x_res1/2)
 
     fileCont += '    hex (0  1  6  7  8  9  14  15) ({0:d} {1:d} {2:d})\n' \
                 '    simpleGrading (\n' \
