@@ -2,7 +2,7 @@
 
 echo "Making utility dissolCalc"
 pushd dissolCalc
-Allwmake
+./Allwmake
 popd
 
 echo
