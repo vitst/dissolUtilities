@@ -525,91 +525,6 @@ void Foam::calcTypes::fieldMap2D::write_temp
   const Time& runTime
 )
 {
-  fileName current_dissolCalc_dir;
-  current_dissolCalc_dir = "postProcessing/dissolCalc" / runTime.timeName();
-  if ( !isDir(current_dissolCalc_dir) ) mkDir(current_dissolCalc_dir);
-  
-  fileName current_file_path;
-  current_file_path = "postProcessing/dissolCalc" / runTime.timeName() / "h";
-  
-  ios_base::openmode mode = (curNum==0) ? ios_base::out|ios_base::trunc : ios_base::out|ios_base::app;  
-  OFstreamMod apertureMapFile( current_file_path, mode);
-  
-  if( curNum==0 ){
-    apertureMapFile << N_ << "   " << M_ << "   " << runTime.value() 
-            << "   " << dx << "   " << dy << endl;
-  }
-  
-  // for gypsum case
-  // find intersection with lower wall
-  const pointField &allPoints = mesh.points();
-  scalar maxPosX = max( allPoints.component(vector::X) );
-  scalar minPosX = min( allPoints.component(vector::X) );
-  scalar maxPosY = max( allPoints.component(vector::Y) );
-  scalar minPosY = min( allPoints.component(vector::Y) );
-  scalar maxPosZ = 1.0;
-  scalar minPosZ = min( allPoints.component(vector::Z) );
-  
-  // triangulation
-  label wallID = mesh.boundaryMesh().findPatchID("solubleWall");
-  
-  labelHashSet includePatches(1);
-  includePatches.insert(wallID);
-  
-  triSurface wallTriSurface
-  (
-    triSurfaceTools::triangulate( mesh.boundaryMesh(), includePatches )
-  );
-  
-  // intersection
-  const triSurfaceSearch querySurf(wallTriSurface);
-  const indexedOctree<treeDataTriSurface>& tree = querySurf.tree();
-  
-  scalar curX = 0.0;
-  scalar curY = 0.0;
-  
-  dx = (maxPosX - minPosX) / static_cast<scalar>(N_);
-  dy = (maxPosY - minPosY) / static_cast<scalar>(M_);
-  
-  
-  // N+1 and M+1 because we need points at x=minPosX and x=maxPosX
-  int count = 0;
-  for(int ijk=0; ijk<M1_*N1_; ijk++)
-  {
-    int totIJK = ijk;
-    label i = totIJK / M1_;
-    label j = totIJK % M1_;
-    curX = minPosX + i*dx;
-    curY = minPosY + j*dy;
-      
-    scalar eps=1e-2;
-    while(curX >= maxPosX ) curX -= eps;
-    while(curX <= minPosX ) curX += eps;
-    while(curY >= maxPosY ) curY -= eps;
-    while(curY <= minPosY ) curY += eps;
-    
-    point searchStart(curX, curY, maxPosZ);
-    point searchEnd  (curX, curY, minPosZ-1.0);
-
-    point hitPoint(0.0, 0.0, 0.0);
-
-    pointIndexHit pHit = tree.findLine(searchStart, searchEnd);
-    if ( pHit.hit() )
-    {
-      hitPoint = pHit.hitPoint();
-    }
-  
-    scalar dist = mag( hitPoint - searchStart );
-    apertureMapFile << dist << "  ";
-
-    count++;
-    if(count>=NUMBER_OF_COLUMNS){ 
-      apertureMapFile <<"\n";
-      count=0;
-    }
-  }
-  
-  
 }
 
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -620,14 +535,22 @@ void Foam::calcTypes::fieldMap2D::write_csurf
   const Time& runTime
 )
 {
-  /*
   fileName current_file_path;
-  current_file_path = "postProcessing/dissolCalc" / runTime.timeName() / "csurf";
-  OFstream aFile( current_file_path );
+  current_file_path = "postProcessing/dissolCalc"/runTime.timeName()/"csurf";
   
-  aFile << N_ << "   " << M_ << "   " << runTime.value() 
-          << "   " << dx << "   " << dy << endl;
+  ios_base::openmode mode = (curNum==0) ? 
+    ios_base::out|ios_base::trunc 
+          : 
+    ios_base::out|ios_base::app;
   
+  OFstreamMod aFile( current_file_path, mode);
+  
+  if( curNum==0 )
+  {
+    aFile << N_ << "   " << M_ << "   " << runTime.value() 
+            << "   " << dx << "   " << dy << endl;
+  }
+
   typedef GeometricField<scalar, fvPatchField, volMesh> fieldC;
   IOobject headerC
   (
@@ -637,38 +560,31 @@ void Foam::calcTypes::fieldMap2D::write_csurf
       IOobject::MUST_READ
   );
   fieldC field_c(headerC, mesh);
-  //autoPtr<interpolation<scalar> >interpolatorC(interpolation<scalar>::New("cellPointFace",field_c));
-  autoPtr<interpolation<scalar> >interpolatorC(interpolation<scalar>::New("cellPoint",field_c));
+  autoPtr<interpolation<scalar> >interpolatorC
+  (
+    interpolation<scalar>::New("cellPoint",field_c)
+  );
+  meshSearch searchEngine(mesh);
   
   int count = 0;
-  meshSearch searchEngine(mesh);
-  for (std::map<int,int>::const_iterator it  = oppositeWallUniform.begin(); 
-                                   it != oppositeWallUniform.end(); ++it ){
-    point ap = pointsXYonsurface[it->first];
+  int i = 0;
+  while (i<pointsXYonsurface.size() )
+  {
+    point first = pointsXYonsurface[i];
     
-    //Info<<ap<<endl;
-    if(ap.y()>SMALL)
-      ap.y() = ap.y() - ap.y()/mag(ap.y())*0.01;
-    //Info<<"   dfsdsd "<<ap<<endl;
-    
-    label cellI = searchEngine.findCell( ap );
-    if (cellI==-1) cellI = searchEngine.findNearestCell( ap );
-    label faceI = -1;
-    //vector interp_fieldU = interpolatorU->interpolate(samp_point, cellI, faceI);
-    
-    //label cellI = searchEngine.findNearestCell( ap );
-    //label faceI = searchEngine.findNearestFace( ap );
-    scalar ac = interpolatorC->interpolate(ap, cellI, faceI);
+    label cellI = searchEngine.findCell( first );
+    if (cellI==-1) cellI = searchEngine.findNearestCell( first );
+    scalar ac = interpolatorC->interpolate(first, cellI, -1);
     
     aFile << ac << "  ";
-
+    
+    i+=expNI;
     count++;
     if(count>=NUMBER_OF_COLUMNS){ 
       aFile <<"\n";
       count=0;
     }
-  }  
-   */
+  }
 }
 
 
@@ -719,7 +635,6 @@ void Foam::calcTypes::fieldMap2D::write_h
       count=0;
     }
   }
-  
 }
 
 void Foam::calcTypes::fieldMap2D::write_q
@@ -728,10 +643,9 @@ void Foam::calcTypes::fieldMap2D::write_q
   const Time& runTime
 )
 {
-  /*
   typedef GeometricField<vector, fvPatchField, volMesh> fieldU;
 
-  IOobject header
+  IOobject headerU
   (
       "U",
       runTime.timeName(),
@@ -739,78 +653,118 @@ void Foam::calcTypes::fieldMap2D::write_q
       IOobject::MUST_READ
   );
   
-  if (header.headerOk())
+  if (headerU.headerOk())
   {
-    fieldU field(header, mesh);
-    
+    fieldU field_u(headerU, mesh);
+
     fileName current_file_path_qx, current_file_path_qy;
-    current_file_path_qx = "postProcessing/dissolCalc" / runTime.timeName() / "qx";
-    current_file_path_qy = "postProcessing/dissolCalc" / runTime.timeName() / "qy";
-    
-    autoPtr<interpolation<vector> >interpolator(interpolation<vector>::New("cellPointFace",field));
-    
-    ios_base::openmode mode = (curNum==0) ? ios_base::out|ios_base::trunc : ios_base::out|ios_base::app;  
+    current_file_path_qx =
+            "postProcessing/dissolCalc" / runTime.timeName() / "qx";
+    current_file_path_qy =
+            "postProcessing/dissolCalc" / runTime.timeName() / "qy";
+  
+    autoPtr<interpolation<vector> >interpolatorU
+    (
+      interpolation<vector>::New("cellPoint",field_u)
+    );
+
+    ios_base::openmode mode =
+            (curNum==0) ? 
+              ios_base::out|ios_base::trunc : 
+              ios_base::out|ios_base::app;  
     OFstreamMod mapXYqx( current_file_path_qx, mode );
     OFstreamMod mapXYqy( current_file_path_qy, mode );
-
-    if( curNum==0 ){
+    
+    if(curNum==0)
+    {
       mapXYqx << N_ << "   " << M_ << "   " << runTime.value()
               << "   " << dx << "   " << dy << endl;
-
       mapXYqy << N_ << "   " << M_ << "   " << runTime.value()
               << "   " << dx << "   " << dy << endl;
     }
     
     meshSearch searchEngine(mesh);
-    
-    int count = 0;
-    for (std::map<int,int>::iterator it  = oppositeWallUniform.begin(); 
-                                     it != oppositeWallUniform.end(); ++it ){
-      vector dirc =  pointsXYonsurface[it->first] - pointsXYonsurface[it->second];
-      
-      scalarField variable(K1_);
-      scalarField Ux(K1_);
-      scalarField Uy(K1_);
-
-      scalar integratedQx = 0.0;
-      scalar integratedQy = 0.0;
-      if( mag(dirc) > 0.0000000001 ){
-        vector dr = dirc / static_cast<scalar>(K_);
-
-        pointField samp_points(K1_);
         
-        forAll(samp_points, i){
-          samp_points[i] = pointsXYonsurface[it->second] + i*dr;
-          label cellI = searchEngine.findNearestCell( samp_points[i] );
-          label faceI = searchEngine.findNearestFace( samp_points[i] );
-          vector interp_field = interpolator->interpolate(samp_points[i], cellI, faceI);
+    int count = 0;
+    int iSurf = 0;
+    while (iSurf<pointsXYonsurface.size() )
+    {
+      point first = pointsXYonsurface[iSurf];
+      point second = first;
+
+      if(expNI == 1)
+      {
+        second.component(intDir) = minPosInt;
+      }
+      else
+      {
+        second = pointsXYonsurface[iSurf+1];
+      }
+      
+      vector dirc =  first - second;
+      
+      scalar integratedUx = 0.0;
+      scalar integratedUy = 0.0;
+      if( mag(dirc) > SMALL )
+      {
+        scalarField variable(K1_);
+        scalarField Ux(K1_);
+        scalarField Uy(K1_);
+        
+        vector dr = 1.0 / static_cast<scalar>(K_) * dirc;
+
+        for(int i=0; i<K1_; i++)
+        {
+          point samp_point = second + i*dr;
+          label cellI = searchEngine.findCell( samp_point );
+          if (cellI==-1)
+          {
+            cellI = searchEngine.findNearestCell( samp_point );
+          }
+          label faceI = -1;
+
+          vector interp_fieldU =
+                  interpolatorU->interpolate(samp_point, cellI, faceI);
+          // velocity = 0 on the surface
+          if(i==0 || i==K_)
+          {
+            interp_fieldU = vector::zero;
+          }
           
-          Ux[i] = interp_field.z(); // z becomes x; x becomes y
-          Uy[i] = interp_field.x();
-          variable[i] = samp_points[i].y();
+          variable[i] = samp_point.component(intDir);
+          Ux[i] = interp_fieldU.component(majDir);
+          Uy[i] = interp_fieldU.component(latDir);
         }
         
-        integratedQx = primitive_simpson_integration(variable, Ux);
-        integratedQy = primitive_simpson_integration(variable, Uy);
+        integratedUx = primitive_simpson_integration(variable, Ux);
+        integratedUy = primitive_simpson_integration(variable, Uy);
       }
-      int ind = std::distance( oppositeWallUniform.begin(), it);
-      Info<<"\r"<< 100.0 * ind / static_cast<double>(N1_*M1_) << "%          ";
       
-      mapXYqx << integratedQx << "  ";
-      mapXYqy << integratedQy << "  ";
+      int ind1 = iSurf + curBlock;
+      int prcnt  = 100 * (ind1    ) / N1M1;
+      int prcnt1 = 100 * (ind1 - 1) / N1M1;
+      if( prcnt%1==0 && prcnt!=prcnt1 )
+      {
+        Info<<"\r"<< prcnt << "%  "<<flush;
+      }
       
+      mapXYqx << integratedUx << "  ";
+      mapXYqy << integratedUy << "  ";
+
+      iSurf += expNI;
       count++;
-      if(count>=NUMBER_OF_COLUMNS){ 
+      if(count >= NUMBER_OF_COLUMNS)
+      { 
         mapXYqx <<"\n";
         mapXYqy <<"\n";
         count=0;
       }
     }  
   }
-  else{
+  else
+  {
     FatalError<<"There is no U field"<<nl<<nl<<exit(FatalError);
   }
-   */
 }
 
 void Foam::calcTypes::fieldMap2D::write_Ccup
@@ -819,7 +773,6 @@ void Foam::calcTypes::fieldMap2D::write_Ccup
   const Time& runTime
 )
 {
-  /*
   typedef GeometricField<vector, fvPatchField, volMesh> fieldU;
   typedef GeometricField<scalar, fvPatchField, volMesh> fieldC;
 
@@ -843,84 +796,140 @@ void Foam::calcTypes::fieldMap2D::write_Ccup
     fieldU field_u(headerU, mesh);
     fieldC field_c(headerC, mesh);
 
-    fileName current_file_path_cup;
-    current_file_path_cup = "postProcessing/dissolCalc" / runTime.timeName() / "c";
+    fileName current_file_path_cup = 
+            "postProcessing/dissolCalc" / runTime.timeName() / "c";
+  
+    autoPtr<interpolation<vector> >interpolatorU
+    (
+      interpolation<vector>::New("cellPoint",field_u)
+    );
+    autoPtr<interpolation<scalar> >interpolatorC
+    (
+      interpolation<scalar>::New("cellPoint",field_c)
+    );
 
-    autoPtr<interpolation<vector> >interpolatorU(interpolation<vector>::New("cellPointFace",field_u));
-    autoPtr<interpolation<scalar> >interpolatorC(interpolation<scalar>::New("cellPointFace",field_c));
-
-    ios_base::openmode mode = (curNum==0) ? ios_base::out|ios_base::trunc : ios_base::out|ios_base::app;  
+    ios_base::openmode mode = 
+            (curNum==0) ? 
+              ios_base::out|ios_base::trunc : 
+              ios_base::out|ios_base::app;  
     OFstreamMod mapXYccup( current_file_path_cup, mode );
-
-    if(curNum==0){
+    
+    if(curNum==0)
+    {
       mapXYccup << N_ << "   " << M_ << "   " << runTime.value() 
-            << "   " << dx << "   " << dy << endl;
+              << "   " << dx << "   " << dy << endl;
     }
     
     meshSearch searchEngine(mesh);
         
     int count = 0;
-    for (std::map<int,int>::iterator it  = oppositeWallUniform.begin(); 
-                                     it != oppositeWallUniform.end(); ++it ){
-      vector dirc =  pointsXYonsurface[it->first] - pointsXYonsurface[it->second];
-      
-      scalarField variable(K1_);
-      scalarField Ux(K1_);
-      scalarField Uy(K1_);
-      
-      scalarField U_C3d(K1_);
+    int iSurf = 0;
+    while (iSurf<pointsXYonsurface.size() )
+    {
+      point first = pointsXYonsurface[iSurf];
+      point second = first;
 
-      scalar integratedQx = 0.0;
-      scalar integratedQy = 0.0;
-      scalar integratedU_C3d = 0.0;
+      if(expNI == 1)
+      {
+        second.component(intDir) = minPosInt;
+      }
+      else
+      {
+        second = pointsXYonsurface[iSurf+1];
+      }
+      
+      vector dirc =  first - second;
+      
+      scalar integratedUx = 0.0;
+      scalar integratedUy = 0.0;
+      scalar integratedUCx = 0.0;
+      scalar integratedUCy = 0.0;
       scalar Ccup = 0.0;
-      if( mag(dirc) > 0.0000000001 ){
+      if( mag(dirc) > SMALL )
+      {
+        scalarField variable(K1_);
+        scalarField Ux(K1_);
+        scalarField Uy(K1_);
+        scalarField UCx(K1_);
+        scalarField UCy(K1_);
+        
         vector dr = 1.0 / static_cast<scalar>(K_) * dirc;
 
-        pointField samp_points(K1_);
-        forAll(samp_points, i){
-          samp_points[i] = pointsXYonsurface[it->second] + i*dr;
-          label cellI = searchEngine.findNearestCell( samp_points[i] );
-          label faceI = searchEngine.findNearestFace( samp_points[i] );
-          vector interp_fieldU = interpolatorU->interpolate(samp_points[i], cellI, faceI);
-          Ux[i] = interp_fieldU.z();
-          Uy[i] = interp_fieldU.x();
-          variable[i] = samp_points[i].y();
+        for(int i=0; i<K1_; i++)
+        {
+          point samp_point = second + i*dr;
+          label cellI = searchEngine.findCell( samp_point );
+          if (cellI==-1)
+          {
+            cellI = searchEngine.findNearestCell( samp_point );
+          }
+          label faceI = -1;
+
+          vector interp_fieldU =
+                  interpolatorU->interpolate(samp_point, cellI, faceI);
+          // velocity = 0 on the surface
+          if(i==0 || i==K_)
+          {
+            interp_fieldU = vector::zero;
+          }
           
-          scalar interp_fieldC = interpolatorC->interpolate(samp_points[i], cellI, faceI);
-          U_C3d[i] = mag( interp_fieldU ) * interp_fieldC;
+          variable[i] = samp_point.component(intDir);
+          Ux[i] = interp_fieldU.component(majDir);
+          Uy[i] = interp_fieldU.component(latDir);
+          
+          scalar interp_fieldC = 
+                  interpolatorC->interpolate(samp_point, cellI, faceI);
+          UCx[i] = Ux[i] * interp_fieldC;
+          UCy[i] = Uy[i] * interp_fieldC;
         }
         
-        integratedQx = primitive_simpson_integration(variable, Ux);
-        integratedQy = primitive_simpson_integration(variable, Uy);
-        integratedU_C3d = primitive_simpson_integration(variable, U_C3d);
-        scalar q_mag = integratedQx*integratedQx+integratedQy*integratedQy;
-        if( q_mag != 0 ){
-          Ccup = integratedU_C3d / std::sqrt(q_mag);
+        integratedUx = primitive_simpson_integration(variable, Ux);
+        integratedUy = primitive_simpson_integration(variable, Uy);
+        integratedUCx = primitive_simpson_integration(variable, UCx);
+        integratedUCy = primitive_simpson_integration(variable, UCy);
+        scalar qSqr = integratedUx*integratedUx+integratedUy*integratedUy;
+        if( qSqr > SMALL )
+        {
+          Ccup = std::sqrt
+                 (
+                  (integratedUCx*integratedUCx+integratedUCy*integratedUCy)
+                  /
+                  qSqr
+                 );
         }
       }
-      int ind = std::distance(oppositeWallUniform.begin(), it);
-      Info<<"\r"<< 100.0 * ind / static_cast<double>(N1_*M1_) << "%          ";
+      
+      int ind1 = iSurf + curBlock;
+      int prcnt  = 100 * (ind1    ) / N1M1;
+      int prcnt1 = 100 * (ind1 - 1) / N1M1;
+      if( prcnt%1==0 && prcnt!=prcnt1 )
+      {
+        Info<<"\r"<< prcnt << "%  "<<flush;
+      }
       
       mapXYccup << Ccup << "  ";
-      
+
+      iSurf += expNI;
       count++;
-      if(count>=NUMBER_OF_COLUMNS){ 
+      if(count >= NUMBER_OF_COLUMNS)
+      { 
         mapXYccup <<"\n";
         count=0;
       }
     }  
   }
-  else if( !headerU.headerOk() && headerC.headerOk() ){
+  else if( !headerU.headerOk() && headerC.headerOk() )
+  {
     FatalError<<"There is no U field"<<nl<<nl<<exit(FatalError);
   }
-  else if( headerU.headerOk() && !headerC.headerOk() ){
+  else if( headerU.headerOk() && !headerC.headerOk() )
+  {
     FatalError<<"There is no C field"<<nl<<nl<<exit(FatalError);
   }
-  else{
+  else
+  {
     FatalError<<"There is no U and C field"<<nl<<nl<<exit(FatalError);
   }
-   */
 }
 
 
@@ -931,7 +940,6 @@ void Foam::calcTypes::fieldMap2D::write_surf
   const Time& runTime
 )
 {
-  /*
   typedef GeometricField<scalar, fvPatchField, volMesh> fieldC;
 
   IOobject headerC
@@ -946,22 +954,27 @@ void Foam::calcTypes::fieldMap2D::write_surf
   {
     fieldC field_c(headerC, mesh);
 
-    fileName current_file_path_h;
-    current_file_path_h = "postProcessing/dissolCalc" / runTime.timeName() / "h";
-    fileName current_file_path_csurf;
-    current_file_path_csurf = "postProcessing/dissolCalc" / runTime.timeName() / "csurf";
+    fileName current_file_path_h =
+            "postProcessing/dissolCalc" / runTime.timeName() / "h";
+    fileName current_file_path_csurf =
+            "postProcessing/dissolCalc" / runTime.timeName() / "csurf";
   
-    autoPtr<interpolation<scalar> >interpolatorC(interpolation<scalar>::New("cellPoint",field_c));
+    autoPtr<interpolation<scalar> >interpolatorC
+    (
+      interpolation<scalar>::New("cellPoint",field_c)
+    );
 
-    ios_base::openmode mode = (curNum==0) ? ios_base::out|ios_base::trunc : ios_base::out|ios_base::app;  
+    ios_base::openmode mode = 
+            (curNum==0) ?
+              ios_base::out|ios_base::trunc : 
+              ios_base::out|ios_base::app;  
     OFstreamMod mapXYcsurf( current_file_path_csurf, mode);
     OFstreamMod apertureMapFile( current_file_path_h, mode);
     
     if(curNum==0)
     {
       mapXYcsurf << N_ << "   " << M_ << "   " << runTime.value() 
-            << "   " << dx << "   " << dy << endl;
-      
+              << "   " << dx << "   " << dy << endl;
       apertureMapFile << N_ << "   " << M_ << "   " << runTime.value() 
               << "   " << dx << "   " << dy << endl;
     }
@@ -969,44 +982,60 @@ void Foam::calcTypes::fieldMap2D::write_surf
     meshSearch searchEngine(mesh);
         
     int count = 0;
-    for(
-          std::map<int,int>::iterator it  = oppositeWallUniform.begin(); 
-                                      it != oppositeWallUniform.end();
-                                    ++it 
-       )
+    int iSurf = 0;
+    while (iSurf<pointsXYonsurface.size() )
     {
-      vector dirc =  pointsXYonsurface[it->first] - pointsXYonsurface[it->second];
+      point first = pointsXYonsurface[iSurf];
+      point second = first;
+
+      if(expNI == 1)
+      {
+        second.component(intDir) = minPosInt;
+      }
+      else
+      {
+        second = pointsXYonsurface[iSurf+1];
+      }
+      
+      vector dirc =  first - second;
       scalar dist = mag( dirc );
       
-      point ap = pointsXYonsurface[it->first];
-      label cellI = searchEngine.findCell( ap );
-      if (cellI==-1) cellI = searchEngine.findNearestCell( ap );
-      label faceI = -1;
-      scalar csurf = interpolatorC->interpolate(ap, cellI, faceI);
+      scalar csurf = 0.0;
+      if( mag(dirc) > SMALL ){
+        label cellI = searchEngine.findCell( first );
+        if (cellI==-1)
+        {
+          cellI = searchEngine.findNearestCell( first );
+        }
+                  
+        csurf = interpolatorC->interpolate(first, cellI, -1);
+      }
       
-      int ind = std::distance(oppositeWallUniform.begin(), it);
-      int ind1 = ind + curBlock;
+      int ind1 = iSurf + curBlock;
       int prcnt  = 100 * (ind1    ) / N1M1;
       int prcnt1 = 100 * (ind1 - 1) / N1M1;
-      if( prcnt%1==0 && prcnt!=prcnt1 ){
+      if( prcnt%1==0 && prcnt!=prcnt1 )
+      {
         Info<<"\r"<< prcnt << "%  "<<flush;
       }
       
       mapXYcsurf << csurf << "  ";
       apertureMapFile << dist << "  ";
 
+      iSurf += expNI;
       count++;
-      if(count>=NUMBER_OF_COLUMNS){ 
+      if(count >= NUMBER_OF_COLUMNS)
+      { 
         mapXYcsurf <<"\n";
         apertureMapFile <<"\n";
         count=0;
       }
     }  
   }
-  else{
+  else
+  {
     FatalError<<"There is no C field"<<nl<<nl<<exit(FatalError);
   }
-   */
 }
 
 
@@ -1016,7 +1045,6 @@ void Foam::calcTypes::fieldMap2D::write_int
   const Time& runTime
 )
 {
-  /*
   typedef GeometricField<vector, fvPatchField, volMesh> fieldU;
   typedef GeometricField<scalar, fvPatchField, volMesh> fieldC;
 
@@ -1040,16 +1068,27 @@ void Foam::calcTypes::fieldMap2D::write_int
     fieldU field_u(headerU, mesh);
     fieldC field_c(headerC, mesh);
 
-    fileName current_file_path_cup;
-    current_file_path_cup = "postProcessing/dissolCalc" / runTime.timeName() / "c";
+    fileName current_file_path_cup =
+            "postProcessing/dissolCalc" / runTime.timeName() / "c";
     fileName current_file_path_qx, current_file_path_qy;
-    current_file_path_qx = "postProcessing/dissolCalc" / runTime.timeName() / "qx";
-    current_file_path_qy = "postProcessing/dissolCalc" / runTime.timeName() / "qy";
+    current_file_path_qx =
+            "postProcessing/dissolCalc" / runTime.timeName() / "qx";
+    current_file_path_qy =
+            "postProcessing/dissolCalc" / runTime.timeName() / "qy";
   
-    autoPtr<interpolation<vector> >interpolatorU(interpolation<vector>::New("cellPoint",field_u));
-    autoPtr<interpolation<scalar> >interpolatorC(interpolation<scalar>::New("cellPoint",field_c));
+    autoPtr<interpolation<vector> >interpolatorU
+    (
+      interpolation<vector>::New("cellPoint",field_u)
+    );
+    autoPtr<interpolation<scalar> >interpolatorC
+    (
+      interpolation<scalar>::New("cellPoint",field_c)
+    );
 
-    ios_base::openmode mode = (curNum==0) ? ios_base::out|ios_base::trunc : ios_base::out|ios_base::app;  
+    ios_base::openmode mode =
+            (curNum==0) ? 
+              ios_base::out|ios_base::trunc : 
+              ios_base::out|ios_base::app;  
     OFstreamMod mapXYccup( current_file_path_cup, mode );
     OFstreamMod mapXYqx( current_file_path_qx, mode );
     OFstreamMod mapXYqy( current_file_path_qy, mode );
@@ -1057,11 +1096,9 @@ void Foam::calcTypes::fieldMap2D::write_int
     if(curNum==0)
     {
       mapXYccup << N_ << "   " << M_ << "   " << runTime.value() 
-            << "   " << dx << "   " << dy << endl;
-      
+              << "   " << dx << "   " << dy << endl;
       mapXYqx << N_ << "   " << M_ << "   " << runTime.value()
               << "   " << dx << "   " << dy << endl;
-
       mapXYqy << N_ << "   " << M_ << "   " << runTime.value()
               << "   " << dx << "   " << dy << endl;
     }
@@ -1069,71 +1106,98 @@ void Foam::calcTypes::fieldMap2D::write_int
     meshSearch searchEngine(mesh);
         
     int count = 0;
-    for(
-          std::map<int,int>::iterator it  = oppositeWallUniform.begin(); 
-                                      it != oppositeWallUniform.end();
-                                    ++it 
-       )
+    int iSurf = 0;
+    while (iSurf<pointsXYonsurface.size() )
     {
-      vector dirc =  pointsXYonsurface[it->first] - pointsXYonsurface[it->second];
+      point first = pointsXYonsurface[iSurf];
+      point second = first;
+
+      if(expNI == 1)
+      {
+        second.component(intDir) = minPosInt;
+      }
+      else
+      {
+        second = pointsXYonsurface[iSurf+1];
+      }
       
-      scalar integratedQx = 0.0;
-      scalar integratedQy = 0.0;
-      scalar integratedU_C3d = 0.0;
+      vector dirc =  first - second;
+      
+      scalar integratedUx = 0.0;
+      scalar integratedUy = 0.0;
+      scalar integratedUCx = 0.0;
+      scalar integratedUCy = 0.0;
       scalar Ccup = 0.0;
-      if( mag(dirc) > SMALL ){
+      if( mag(dirc) > SMALL )
+      {
         scalarField variable(K1_);
         scalarField Ux(K1_);
         scalarField Uy(K1_);
-
-        scalarField U_C3d(K1_);
-
+        scalarField UCx(K1_);
+        scalarField UCy(K1_);
+        
         vector dr = 1.0 / static_cast<scalar>(K_) * dirc;
 
         for(int i=0; i<K1_; i++)
         {
-          point samp_point = pointsXYonsurface[it->second] + i*dr;
-          
+          point samp_point = second + i*dr;
           label cellI = searchEngine.findCell( samp_point );
-          
-          if (cellI==-1) cellI = searchEngine.findNearestCell( samp_point );
+          if (cellI==-1)
+          {
+            cellI = searchEngine.findNearestCell( samp_point );
+          }
           label faceI = -1;
-          vector interp_fieldU = interpolatorU->interpolate(samp_point, cellI, faceI);
-          
-          if(i==0 || i==K1_-1){
+
+          vector interp_fieldU =
+                  interpolatorU->interpolate(samp_point, cellI, faceI);
+          // velocity = 0 on the surface
+          if(i==0 || i==K_)
+          {
             interp_fieldU = vector::zero;
           }
           
-          Ux[i] = interp_fieldU.z();
-          Uy[i] = interp_fieldU.x();
-          variable[i] = samp_point.y();
+          variable[i] = samp_point.component(intDir);
+          Ux[i] = interp_fieldU.component(majDir);
+          Uy[i] = interp_fieldU.component(latDir);
           
-          scalar interp_fieldC = interpolatorC->interpolate(samp_point, cellI, faceI);
-          U_C3d[i] = mag( interp_fieldU ) * interp_fieldC;
+          scalar interp_fieldC = 
+                  interpolatorC->interpolate(samp_point, cellI, faceI);
+          UCx[i] = Ux[i] * interp_fieldC;
+          UCy[i] = Uy[i] * interp_fieldC;
         }
         
-        integratedQx = primitive_simpson_integration(variable, Ux);
-        integratedQy = primitive_simpson_integration(variable, Uy);
-        integratedU_C3d = primitive_simpson_integration(variable, U_C3d);
-        scalar q_mag = integratedQx*integratedQx+integratedQy*integratedQy;
-        if( q_mag != 0 ){
-          Ccup = integratedU_C3d / std::sqrt(q_mag);
+        integratedUx = primitive_simpson_integration(variable, Ux);
+        integratedUy = primitive_simpson_integration(variable, Uy);
+        integratedUCx = primitive_simpson_integration(variable, UCx);
+        integratedUCy = primitive_simpson_integration(variable, UCy);
+        scalar qSqr = integratedUx*integratedUx+integratedUy*integratedUy;
+        if( qSqr > SMALL )
+        {
+          Ccup = std::sqrt
+                 (
+                  (integratedUCx*integratedUCx+integratedUCy*integratedUCy)
+                  /
+                  qSqr
+                 );
         }
       }
-      int ind = std::distance(oppositeWallUniform.begin(), it);
-      int ind1 = ind + curBlock;
+      
+      int ind1 = iSurf + curBlock;
       int prcnt  = 100 * (ind1    ) / N1M1;
       int prcnt1 = 100 * (ind1 - 1) / N1M1;
-      if( prcnt%1==0 && prcnt!=prcnt1 ){
+      if( prcnt%1==0 && prcnt!=prcnt1 )
+      {
         Info<<"\r"<< prcnt << "%  "<<flush;
       }
       
       mapXYccup << Ccup << "  ";
-      mapXYqx << integratedQx << "  ";
-      mapXYqy << integratedQy << "  ";
+      mapXYqx << integratedUx << "  ";
+      mapXYqy << integratedUy << "  ";
 
+      iSurf += expNI;
       count++;
-      if(count>=NUMBER_OF_COLUMNS){ 
+      if(count >= NUMBER_OF_COLUMNS)
+      { 
         mapXYccup <<"\n";
         mapXYqx <<"\n";
         mapXYqy <<"\n";
@@ -1141,20 +1205,19 @@ void Foam::calcTypes::fieldMap2D::write_int
       }
     }  
   }
-  else if( !headerU.headerOk() && headerC.headerOk() ){
+  else if( !headerU.headerOk() && headerC.headerOk() )
+  {
     FatalError<<"There is no U field"<<nl<<nl<<exit(FatalError);
   }
-  else if( headerU.headerOk() && !headerC.headerOk() ){
+  else if( headerU.headerOk() && !headerC.headerOk() )
+  {
     FatalError<<"There is no C field"<<nl<<nl<<exit(FatalError);
   }
-  else{
+  else
+  {
     FatalError<<"There is no U and C field"<<nl<<nl<<exit(FatalError);
   }
-   */
 }
-
-
-
 
 void Foam::calcTypes::fieldMap2D::write_all
 (
@@ -1185,20 +1248,31 @@ void Foam::calcTypes::fieldMap2D::write_all
     fieldU field_u(headerU, mesh);
     fieldC field_c(headerC, mesh);
 
-    fileName current_file_path_cup;
-    current_file_path_cup = "postProcessing/dissolCalc" / runTime.timeName() / "c";
+    fileName current_file_path_cup =
+            "postProcessing/dissolCalc" / runTime.timeName() / "c";
     fileName current_file_path_qx, current_file_path_qy;
-    current_file_path_qx = "postProcessing/dissolCalc" / runTime.timeName() / "qx";
-    current_file_path_qy = "postProcessing/dissolCalc" / runTime.timeName() / "qy";
-    fileName current_file_path_h;
-    current_file_path_h = "postProcessing/dissolCalc" / runTime.timeName() / "h";
-    fileName current_file_path_csurf;
-    current_file_path_csurf = "postProcessing/dissolCalc" / runTime.timeName() / "csurf";
+    current_file_path_qx =
+            "postProcessing/dissolCalc" / runTime.timeName() / "qx";
+    current_file_path_qy =
+            "postProcessing/dissolCalc" / runTime.timeName() / "qy";
+    fileName current_file_path_h =
+            "postProcessing/dissolCalc" / runTime.timeName() / "h";
+    fileName current_file_path_csurf =
+            "postProcessing/dissolCalc" / runTime.timeName() / "csurf";
   
-    autoPtr<interpolation<vector> >interpolatorU(interpolation<vector>::New("cellPoint",field_u));
-    autoPtr<interpolation<scalar> >interpolatorC(interpolation<scalar>::New("cellPoint",field_c));
+    autoPtr<interpolation<vector> >interpolatorU
+    (
+      interpolation<vector>::New("cellPoint",field_u)
+    );
+    autoPtr<interpolation<scalar> >interpolatorC
+    (
+      interpolation<scalar>::New("cellPoint",field_c)
+    );
 
-    ios_base::openmode mode = (curNum==0) ? ios_base::out|ios_base::trunc : ios_base::out|ios_base::app;  
+    ios_base::openmode mode =
+            (curNum==0) ? 
+              ios_base::out|ios_base::trunc : 
+              ios_base::out|ios_base::app;  
     OFstreamMod mapXYccup( current_file_path_cup, mode );
     OFstreamMod mapXYqx( current_file_path_qx, mode );
     OFstreamMod mapXYqy( current_file_path_qy, mode );
@@ -1246,7 +1320,8 @@ void Foam::calcTypes::fieldMap2D::write_all
       scalar integratedUCx = 0.0;
       scalar integratedUCy = 0.0;
       scalar Ccup = 0.0;
-      if( mag(dirc) > SMALL ){
+      if( mag(dirc) > SMALL )
+      {
         scalarField variable(K1_);
         scalarField Ux(K1_);
         scalarField Uy(K1_);
@@ -1265,7 +1340,9 @@ void Foam::calcTypes::fieldMap2D::write_all
           }
           label faceI = -1;
 
-          vector interp_fieldU = interpolatorU->interpolate(samp_point, cellI, faceI);
+          vector interp_fieldU =
+                  interpolatorU->interpolate(samp_point, cellI, faceI);
+          // velocity = 0 on the surface
           if(i==0 || i==K_)
           {
             interp_fieldU = vector::zero;
@@ -1275,10 +1352,11 @@ void Foam::calcTypes::fieldMap2D::write_all
           Ux[i] = interp_fieldU.component(majDir);
           Uy[i] = interp_fieldU.component(latDir);
           
-          scalar interp_fieldC = interpolatorC->interpolate(samp_point, cellI, faceI);
+          scalar interp_fieldC = 
+                  interpolatorC->interpolate(samp_point, cellI, faceI);
           UCx[i] = Ux[i] * interp_fieldC;
           UCy[i] = Uy[i] * interp_fieldC;
-          if(i==0)
+          if(i==K_)
           {
             csurf = interp_fieldC;
           }
@@ -1291,7 +1369,12 @@ void Foam::calcTypes::fieldMap2D::write_all
         scalar qSqr = integratedUx*integratedUx+integratedUy*integratedUy;
         if( qSqr > SMALL )
         {
-          Ccup = std::sqrt( (integratedUCx*integratedUCx+integratedUCy*integratedUCy)/qSqr );
+          Ccup = std::sqrt
+                 (
+                  (integratedUCx*integratedUCx+integratedUCy*integratedUCy)
+                  /
+                  qSqr
+                 );
         }
       }
       
@@ -1322,13 +1405,16 @@ void Foam::calcTypes::fieldMap2D::write_all
       }
     }  
   }
-  else if( !headerU.headerOk() && headerC.headerOk() ){
+  else if( !headerU.headerOk() && headerC.headerOk() )
+  {
     FatalError<<"There is no U field"<<nl<<nl<<exit(FatalError);
   }
-  else if( headerU.headerOk() && !headerC.headerOk() ){
+  else if( headerU.headerOk() && !headerC.headerOk() )
+  {
     FatalError<<"There is no C field"<<nl<<nl<<exit(FatalError);
   }
-  else{
+  else
+  {
     FatalError<<"There is no U and C field"<<nl<<nl<<exit(FatalError);
   }
 }
