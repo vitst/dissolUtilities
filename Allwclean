@@ -2,7 +2,7 @@
 
 echo "Cleaning dissolCalc"
 pushd dissolCalc
-Allwclean
+./Allwclean
 popd
 
 echo "Cleaning other utilities"
