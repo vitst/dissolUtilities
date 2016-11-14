@@ -5,6 +5,7 @@
 # Include
 lnInclude/
 linux64Gcc*/
+linux64Gcc53DPInt32Opt/
 
 # Compiled Object files
 *.slo

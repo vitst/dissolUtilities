@@ -14,6 +14,5 @@ EXE_LIBS = \
     -lsampling \
     -ldynamicFvMesh \
     -L$(FOAM_USER_LIBBIN) \
-    -ldissolMeshRelax \
-	-lfftw3
+    -lfftw3
 
