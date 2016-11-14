@@ -44,7 +44,11 @@ Needs dictionary
 #include <complex>
 #include <fftw3.h>
 
-#include "meshRelax.H"
+#include "fvCFD.H"
+#include "dynamicFvMesh.H"
+#include "coupledPatchInterpolation.H"
+#include "pointPatchField.H"
+//#include "meshRelax.H"
 
 /*
  #######################################################################################
