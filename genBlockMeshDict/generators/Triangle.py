@@ -157,7 +157,7 @@ class Triangle(gbm.AbstractBaseGenerator):
     fileCont += 'boundary\n'
     fileCont += '(\n'
 
-    fileCont += '    aux\n'
+    fileCont += '    aux1\n'
     fileCont += '    {\n'
     fileCont += '      type patch;\n'
     fileCont += '      faces\n'
@@ -165,13 +165,22 @@ class Triangle(gbm.AbstractBaseGenerator):
     fileCont += '        ( 0   1  4  3)\n'
     fileCont += '        ( 1   2  5  4)\n'
     fileCont += '        ( 0   2  5  3)\n'
+    fileCont += '      );\n'
+    fileCont += '    }\n'
+    fileCont += '\n'
+    
+    fileCont += '    aux2\n'
+    fileCont += '    {\n'
+    fileCont += '      type patch;\n'
+    fileCont += '      faces\n'
+    fileCont += '      (\n'
     fileCont += '        ( 0   1  2  0)\n'
     fileCont += '        ( 3   4  5  3)\n'
     fileCont += '      );\n'
     fileCont += '    }\n'
-    fileCont += '\n'
 
     fileCont += ');\n'
+
   # *****************************************************************************
     # add boundaries                                     #
     ######################################################
