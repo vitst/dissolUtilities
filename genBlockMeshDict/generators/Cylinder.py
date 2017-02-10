@@ -36,9 +36,9 @@ class Cylinder(gbm.AbstractBaseGenerator):
     n_surf = self.parameters[9][1]
     #axis 0 = x, 1 = y
     if axis == 0:
-    	func = alpha * np.cos(theta * np.pi/4 + delt * np.pi/2/n_surf)
+      func = alpha * np.cos(theta * np.pi/4 + delt * np.pi/2/n_surf)
     if axis == 1:
-    	func = beta * np.sin(theta * np.pi/4 + delt * np.pi/2/n_surf)
+      func = beta * np.sin(theta * np.pi/4 + delt * np.pi/2/n_surf)
     return func
 
   def y_ellipsoid_function(self, theta, delt):
@@ -67,7 +67,7 @@ class Cylinder(gbm.AbstractBaseGenerator):
     return fileCont2
 
   def createBlockMeshDict(self, dictFileName):
-  	 # read parameters
+    # read parameters
     lines = self.read_dict(dictFileName)
     empty, x_rect = self.check_par('x_rect', lines)
     empty, y_rect = self.check_par('y_rect', lines)

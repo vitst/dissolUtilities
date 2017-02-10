@@ -22,31 +22,63 @@ class InternalCylinder(gbm.AbstractBaseGenerator):
     self.parameters.append(['y_rect',   50.0,  'size of the rectangular prism in y direction (outer)'])
     self.parameters.append(['Lz',       500.0, 'size of the fracture in Z direction'])
     self.parameters.append(['Width',    1.0,   'width of the fluid layer'])
-    self.parameters.append(['tang_res', 16,    'resolution in tangential direction'])
+    self.parameters.append(['tang_res', 50,    'resolution in tangential direction'])
     self.parameters.append(['norm_res', 8,     'resolution in normal direction'])
-    self.parameters.append(['z_res',    512,   'resolution in Z direction'])
-    self.parameters.append(['norm_G',   10.0,  'grading in normal direction'])
-    self.parameters.append(['z_G',      10.0,  'grading in Z direction'])
+    self.parameters.append(['z_res',    400,   'resolution in Z direction'])
+    self.parameters.append(['norm_G',   0.1,  'grading in normal direction'])
+    self.parameters.append(['z_G',      1.0,  'grading in Z direction'])
     self.parameters.append(['n_surf',   500,    'number of points on the edges of the cylinder'])
-
-    self.parameters.append(['beta',     1.0, 'Y direction elliptical radius'])
-    self.parameters.append(['alpha',    1.5, 'X direction elliptical radius'])
 
   def ellipsoid_function(self, N, A, B):
 
-    theta = np.linspace(0, np.pi, N, endpoint=True)
+    theta = np.linspace(0, np.pi/2., N, endpoint=True)
 
     x = np.zeros(N)
     y = np.zeros(N)
 
-    for i in len(theta):
+    for i in range(N):
       x[i] = A * np.cos(theta[i])
       y[i] = B * np.sin(theta[i])
 
     return x, y
+  
+  def edge(self, n_surf, pids, x, y, currentZ):
+    fileCont2 = '\n'
+    fileCont2 += '    spline {} (\n'.format(pids[0])
+    for i in range(n_surf):
+      currentX = -x[i]
+      currentY = -y[i]
+      fileCont2 += '        ( {0:f}\t{1:f}\t{2:f} )\n'.format(currentX, currentY, currentZ)
+    fileCont2 += '    )\n'
+  
+    fileCont2 += '\n'
+    fileCont2 += '    spline {} (\n'.format(pids[1])
+    for i in range(n_surf):
+      currentX =  x[n_surf - 1 - i]
+      currentY = -y[n_surf - 1 - i]
+      fileCont2 += '        ( {0:f}\t{1:f}\t{2:f} )\n'.format(currentX, currentY, currentZ)
+    fileCont2 += '    )\n'
+  
+    fileCont2 += '\n'
+    fileCont2 += '    spline {} (\n'.format(pids[2])
+    for i in range(n_surf):
+      currentX = x[i]
+      currentY = y[i]
+      fileCont2 += '        ( {0:f}\t{1:f}\t{2:f} )\n'.format(currentX, currentY, currentZ)
+    fileCont2 += '    )\n'
+  
+    fileCont2 += '\n'
+    fileCont2 += '    spline {} (\n'.format(pids[3])
+    for i in range(n_surf):
+      currentX = -x[n_surf - 1 - i]
+      currentY =  y[n_surf - 1 - i]
+      fileCont2 += '        ( {0:f}\t{1:f}\t{2:f} )\n'.format(currentX, currentY, currentZ)
+    fileCont2 += '    )\n'
+  
+    return fileCont2
 
   def createBlockMeshDict(self, dictFileName):
-  	 # read parameters
+    # read parameters
     lines = self.read_dict(dictFileName)
     empty, x_rect = self.check_par('x_rect', lines)
     empty, y_rect = self.check_par('y_rect', lines)
@@ -61,9 +93,6 @@ class InternalCylinder(gbm.AbstractBaseGenerator):
     empty, z_G = self.check_par('z_G', lines)
     empty, n_surf = self.check_par('n_surf', lines)
 
-    empty, beta = self.check_par('beta', lines)
-    empty, alpha = self.check_par('alpha', lines)  	  
-    
     fileCont = '\n'
     fileCont += 'convertToMeters 1.0; \n'
     fileCont += '\n'
@@ -74,33 +103,37 @@ class InternalCylinder(gbm.AbstractBaseGenerator):
     fileCont += 'vertices\n'
     fileCont += '(\n'
 
-    #Lowest plane
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(self.ellipsoid_function(5, 0, 0), self.ellipsoid_function(5, 0, 1), 0.0)   # 0
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(self.ellipsoid_function(7, 0, 0), self.ellipsoid_function(7, 0, 1), 0.0)   # 1
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format( 								 -x_rect,  								  -y_rect, 0.0)   # 2
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format( 								  x_rect,  								  -y_rect, 0.0)   # 3
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format( 								 -x_rect,  								   y_rect, 0.0)   # 4
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format( 								  x_rect,  								   y_rect, 0.0)   # 5
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(self.ellipsoid_function(3, 0, 0), self.ellipsoid_function(3, 0, 1), 0.0)   # 6
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(self.ellipsoid_function(1, 0, 0), self.ellipsoid_function(1, 0, 1), 0.0)   # 7
+    xO = x_rect/2.0
+    xI = x_rect/2.0 - Width
+    yO = y_rect/2.0
+    yI = y_rect/2.0 - Width
 
-    #Highest plane
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(self.ellipsoid_function(5, 0, 0), self.ellipsoid_function(5, 0, 1),  Lz)   # 8
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(self.ellipsoid_function(7, 0, 0), self.ellipsoid_function(7, 0, 1),  Lz)   # 9
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format( 								 -x_rect,  								  -y_rect,  Lz)   #10
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format( 								  x_rect,  							 	  -y_rect,  Lz)   #11
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format( 								 -x_rect,  								   y_rect,  Lz)   #12
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format( 								  x_rect,  								   y_rect,  Lz)   #13
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(self.ellipsoid_function(3, 0, 0), self.ellipsoid_function(3, 0, 1),  Lz)   #14
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(self.ellipsoid_function(1, 0, 0), self.ellipsoid_function(1, 0, 1),  Lz)   #15
+    # Lowest plane
+    # outer
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format( -xO, 0.0, 0.0)   # 0
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format( 0.0, -yO, 0.0)   # 1
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(  xO, 0.0, 0.0)   # 2
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format( 0.0,  yO, 0.0)   # 3
+    # inner
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format( -xI, 0.0, 0.0)   # 4
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format( 0.0, -yI, 0.0)   # 5
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(  xI, 0.0, 0.0)   # 6
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format( 0.0,  yI, 0.0)   # 7
+
+    # Highest plane
+    # outer
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format( -xO, 0.0, Lz)   # 8
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format( 0.0, -yO, Lz)   # 9
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(  xO, 0.0, Lz)   # 10
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format( 0.0,  yO, Lz)   # 11
+    # inner
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format( -xI, 0.0, Lz)   # 12
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format( 0.0, -yI, Lz)   # 13
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(  xI, 0.0, Lz)   # 14
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format( 0.0,  yI, Lz)   # 15
 
     fileCont += ');\n'
 
-	 
-    #x = alpha * np.cos(theta * phi + i * dphi)
-    #y = R * np.sin(theta * phi + i * dphi)
-  
-  
     ######################################################
     # add edges                                          #
     ######################################################
@@ -108,18 +141,25 @@ class InternalCylinder(gbm.AbstractBaseGenerator):
     fileCont += 'edges\n'
     fileCont += '(\n'
     
-    #******Cylinder******
+    #******Outer Cylinder******
+    x, y = self.ellipsoid_function(n_surf, xO, yO)
     #Inlet
-    fileCont += self.spline_function("0 1", 5, 0)
-    fileCont += self.spline_function("6 7", 1, 0)
-    fileCont += self.spline_function("0 6", 3, 0)
-    fileCont += self.spline_function("1 7", 7, 0)
-    #Outlet    
-    fileCont += self.spline_function(" 8  9", 5, Lz)
-    fileCont += self.spline_function("14 15", 1, Lz)
-    fileCont += self.spline_function(" 8 14", 3, Lz)
-    fileCont += self.spline_function(" 9 15", 7, Lz)
-    #********************
+    pids = ['0 1', '1 2', '2 3', '3 0']
+    fileCont += self.edge(n_surf, pids, x, y, 0.0)
+    #Outlet
+    pids = ['8 9', '9 10', '10 11', '11 8']
+    fileCont += self.edge(n_surf, pids, x, y, Lz)
+    #**************************
+    
+    #******Inner Cylinder******
+    x, y = self.ellipsoid_function(n_surf, xI, yI)
+    #Inlet
+    pids = ['4 5', '5 6', '6 7', '7 4']
+    fileCont += self.edge(n_surf, pids, x, y, 0.0)
+    #Outlet
+    pids = ['12 13', '13 14', '14 15', '15 12']
+    fileCont += self.edge(n_surf, pids, x, y, Lz)
+    #**************************
 
     fileCont += ');\n'
 
@@ -132,48 +172,40 @@ class InternalCylinder(gbm.AbstractBaseGenerator):
 
     #####################################################################################
     #block 0
-    fileCont += '    hex (0  1  3  2   8   9  11  10) ({0:d} {1:d} {2:d})\n' \
+    fileCont += '    hex (0  1  5  4   8   9  13  12) ({0:d} {1:d} {2:d})\n' \
                 '      simpleGrading (\n' \
                 '        {3:g}\n' \
                 '        {4:g}\n' \
                 '        {5:g}\n' \
                 '      )\n'. \
-                format(x_res, y_res, z_res, x_G, y_G, z_G)
+                format(tang_res, norm_res, z_res, 1.0, norm_G, z_G)
     #block 1            
-    fileCont += '    hex (7  6  4  5  15  14  12  13) ({0:d} {1:d} {2:d})\n' \
+    fileCont += '    hex (1  2  6  5  9  10  14  13) ({0:d} {1:d} {2:d})\n' \
                 '      simpleGrading (\n' \
                 '        {3:g}\n' \
                 '        {4:g}\n' \
                 '        {5:g}\n' \
                 '      )\n'. \
-                format(x_res, y_res, z_res, x_G, y_G, z_G)
+                format(tang_res, norm_res, z_res, 1.0, norm_G, z_G)
 
     #block 2            
-    fileCont += '    hex (6  0  2  4  14   8  10  12) ({0:d} {1:d} {2:d})\n' \
+    fileCont += '    hex (2  3  7  6  10   11  15  14) ({0:d} {1:d} {2:d})\n' \
                 '      simpleGrading (\n' \
                 '        {3:g}\n' \
                 '        {4:g}\n' \
                 '        {5:g}\n' \
                 '      )\n'. \
-                format(x_res, y_res, z_res, x_G, y_G, z_G)
+                format(tang_res, norm_res, z_res, 1.0, norm_G, z_G)
                 
     #block 3            
-    fileCont += '    hex (1  7  5  3   9  15  13  11) ({0:d} {1:d} {2:d})\n' \
+    fileCont += '    hex (3  0  4  7  11  8  12  15) ({0:d} {1:d} {2:d})\n' \
                 '      simpleGrading (\n' \
                 '        {3:g}\n' \
                 '        {4:g}\n' \
                 '        {5:g}\n' \
                 '      )\n'. \
-                format(x_res, y_res, z_res, x_G, y_G, z_G)       
+                format(tang_res, norm_res, z_res, 1.0, norm_G, z_G)
                 
-    #block 3            
-    fileCont += '    hex (2  3  5  4  10  11  13  12) ({0:d} {1:d} {2:d})\n' \
-                '      simpleGrading (\n' \
-                '        {3:g}\n' \
-                '        {4:g}\n' \
-                '        {5:g}\n' \
-                '      )\n'. \
-                format(x_res, x_res, z_res, 1, 1, z_G)          
                 
     fileCont += ');\n'
 
@@ -189,11 +221,10 @@ class InternalCylinder(gbm.AbstractBaseGenerator):
     fileCont += '      type patch;\n'
     fileCont += '      faces\n'
     fileCont += '      (\n'
-    fileCont += '        ( 8   9  11  10)\n'
-    fileCont += '        (14  12  13  15)\n'
-    fileCont += '        ( 8  10  12  14)\n'
-    fileCont += '        ( 9  15  13  11)\n'
-    fileCont += '        (10  11  13  12)\n'
+    fileCont += '        ( 8   9  13  12)\n'
+    fileCont += '        ( 9  10  14  13)\n'
+    fileCont += '        (10  11  15  14)\n'
+    fileCont += '        (11   8  12  15)\n'
     fileCont += '      );\n'
     fileCont += '    }\n'
     fileCont += '\n'
@@ -203,24 +234,36 @@ class InternalCylinder(gbm.AbstractBaseGenerator):
     fileCont += '      type patch;\n'
     fileCont += '      faces\n'
     fileCont += '      (\n'
-    fileCont += '        ( 0   1   3   2)\n'
-    fileCont += '        ( 6   4   5   7)\n'
-    fileCont += '        ( 0   2   4   6)\n'
-    fileCont += '        ( 1   7   5   3)\n'
-    fileCont += '        ( 2   3   5   4)\n'
+    fileCont += '        ( 0   1   5   4)\n'
+    fileCont += '        ( 1   2   6   5)\n'
+    fileCont += '        ( 2   3   7   6)\n'
+    fileCont += '        ( 3   0   4   7)\n'
     fileCont += '      );\n'
     fileCont += '    }\n'
     fileCont += '\n'
 
-    fileCont += '    walls\n'
+    fileCont += '    insolubleSurf\n'
     fileCont += '    {\n'
-    fileCont += '      type wall;\n'
+    fileCont += '      type patch;\n'
     fileCont += '      faces\n'
     fileCont += '      (\n'
     fileCont += '        ( 0   1   9   8)\n'
+    fileCont += '        ( 1   2  10   9)\n'
+    fileCont += '        ( 2   3  11  10)\n'
+    fileCont += '        ( 3   0   8  11)\n'
+    fileCont += '      );\n'
+    fileCont += '    }\n'
+    fileCont += '\n'
+
+    fileCont += '    solubleSurf\n'
+    fileCont += '    {\n'
+    fileCont += '      type patch;\n'
+    fileCont += '      faces\n'
+    fileCont += '      (\n'
+    fileCont += '        ( 4   5  13  12)\n'
+    fileCont += '        ( 5   6  14  13)\n'
     fileCont += '        ( 6   7  15  14)\n'
-    fileCont += '        ( 6   0   8  14)\n'
-    fileCont += '        ( 1   7  15   9)\n'
+    fileCont += '        ( 7   4  12  15)\n'
     fileCont += '      );\n'
     fileCont += '    }\n'
     fileCont += '\n'
