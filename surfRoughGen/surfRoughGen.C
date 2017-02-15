@@ -169,6 +169,14 @@ public:
         if(wayToApply=="symmetric" || wayToApply=="oneSurface")
           wd[i] = sFn[ind];
 
+        if(wayToApply=="oneSurfaceDecay")
+        {
+          //wd[i] = sFn[ind];
+          double factor = ( 1 - curMaj / Llat );
+          if( factor<0.0 ) factor = 0.0;
+          wd[i] = sFn[ind] * factor;
+        }
+        
         if(wayToApply=="synchronous")
           wd[i] = sign * sFn[ind];
 
