@@ -103,10 +103,10 @@ class InternalCylinder(gbm.AbstractBaseGenerator):
     fileCont += 'vertices\n'
     fileCont += '(\n'
 
-    xO = x_rect/2.0
-    xI = x_rect/2.0 - Width
-    yO = y_rect/2.0
-    yI = y_rect/2.0 - Width
+    xO = x_rect/2.0 + Width / 2.0
+    xI = x_rect/2.0 - Width / 2.0
+    yO = y_rect/2.0 + Width / 2.0
+    yI = y_rect/2.0 - Width / 2.0
 
     # Lowest plane
     # outer

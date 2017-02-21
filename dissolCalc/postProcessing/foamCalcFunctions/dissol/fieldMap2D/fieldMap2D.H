@@ -82,6 +82,7 @@ class fieldMap2D
         int N1M1;
         
         word patchName;
+        word geometry;
         
         int expNI;  //   expected number of intersections
         
@@ -129,6 +130,11 @@ protected:
             );
 
             void build_surface_points
+            (
+              const fvMesh& mesh
+            );
+            
+            void build_surface_pointsCC
             (
               const fvMesh& mesh
             );
@@ -183,6 +189,11 @@ protected:
               const Time& runTime
             );
             
+            void write_ccAll
+            (
+              const fvMesh& mesh,
+              const Time& runTime
+            );
 public:
 
     //- Runtime type information
