@@ -915,7 +915,7 @@ void Foam::calcTypes::fieldMap2D::write_Ccup
       IOobject::MUST_READ
   );
   
-  if (headerU.headerOk() && headerC.headerOk())
+  //if (headerU.headerOk() && headerC.headerOk())
   {
     fieldU field_u(headerU, mesh);
     fieldC field_c(headerC, mesh);
@@ -1042,6 +1042,8 @@ void Foam::calcTypes::fieldMap2D::write_Ccup
       }
     }  
   }
+  
+  /*
   else if( !headerU.headerOk() && headerC.headerOk() )
   {
     FatalError<<"There is no U field"<<nl<<nl<<exit(FatalError);
@@ -1054,6 +1056,7 @@ void Foam::calcTypes::fieldMap2D::write_Ccup
   {
     FatalError<<"There is no U and C field"<<nl<<nl<<exit(FatalError);
   }
+  */
 }
 
 
@@ -1074,7 +1077,7 @@ void Foam::calcTypes::fieldMap2D::write_surf
       IOobject::MUST_READ
   );
   
-  if (headerC.headerOk())
+  //if (headerC.headerOk())
   {
     fieldC field_c(headerC, mesh);
 
@@ -1187,7 +1190,7 @@ void Foam::calcTypes::fieldMap2D::write_int
       IOobject::MUST_READ
   );
   
-  if (headerU.headerOk() && headerC.headerOk())
+  //if (headerU.headerOk() && headerC.headerOk())
   {
     fieldU field_u(headerU, mesh);
     fieldC field_c(headerC, mesh);
@@ -1329,6 +1332,7 @@ void Foam::calcTypes::fieldMap2D::write_int
       }
     }  
   }
+  /*
   else if( !headerU.headerOk() && headerC.headerOk() )
   {
     FatalError<<"There is no U field"<<nl<<nl<<exit(FatalError);
@@ -1341,6 +1345,7 @@ void Foam::calcTypes::fieldMap2D::write_int
   {
     FatalError<<"There is no U and C field"<<nl<<nl<<exit(FatalError);
   }
+  */
 }
 
 void Foam::calcTypes::fieldMap2D::write_all
@@ -1367,7 +1372,7 @@ void Foam::calcTypes::fieldMap2D::write_all
       IOobject::MUST_READ
   );
   
-  if (headerU.headerOk() && headerC.headerOk())
+  //if (headerU.headerOk() && headerC.headerOk())
   {
     fieldU field_u(headerU, mesh);
     fieldC field_c(headerC, mesh);
@@ -1529,6 +1534,7 @@ void Foam::calcTypes::fieldMap2D::write_all
       }
     }  
   }
+  /*
   else if( !headerU.headerOk() && headerC.headerOk() )
   {
     FatalError<<"There is no U field"<<nl<<nl<<exit(FatalError);
@@ -1541,6 +1547,7 @@ void Foam::calcTypes::fieldMap2D::write_all
   {
     FatalError<<"There is no U and C field"<<nl<<nl<<exit(FatalError);
   }
+  */
 }
 
 void Foam::calcTypes::fieldMap2D::write_ccAll
@@ -1567,7 +1574,7 @@ void Foam::calcTypes::fieldMap2D::write_ccAll
       IOobject::MUST_READ
   );
   
-  if (headerU.headerOk() && headerC.headerOk())
+  //if (headerU.headerOk() && headerC.headerOk())
   {
     fieldU field_u(headerU, mesh);
     fieldC field_c(headerC, mesh);
@@ -1638,6 +1645,8 @@ void Foam::calcTypes::fieldMap2D::write_ccAll
       vector dirc =  second - first;
       
       scalar dist = mag( dirc );
+      
+      Info<<"  f: "<<first<<"  s: "<<second<<endl;
       
       scalar csurf = 0.0;
       scalar integratedUx = 0.0;
@@ -1736,6 +1745,7 @@ void Foam::calcTypes::fieldMap2D::write_ccAll
       }
     }  
   }
+  /*
   else if( !headerU.headerOk() && headerC.headerOk() )
   {
     FatalError<<"There is no U field"<<nl<<nl<<exit(FatalError);
@@ -1748,6 +1758,7 @@ void Foam::calcTypes::fieldMap2D::write_ccAll
   {
     FatalError<<"There is no U and C field"<<nl<<nl<<exit(FatalError);
   }
+  */
 }
 
 
