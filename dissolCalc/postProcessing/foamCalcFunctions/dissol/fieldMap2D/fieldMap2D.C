@@ -777,7 +777,7 @@ void Foam::calcTypes::fieldMap2D::write_q
       IOobject::MUST_READ
   );
   
-  if (headerU.headerOk())
+  //if (headerU.headerOk())
   {
     fieldU field_u(headerU, mesh);
 
@@ -885,10 +885,12 @@ void Foam::calcTypes::fieldMap2D::write_q
       }
     }  
   }
+  /*
   else
   {
     FatalError<<"There is no U field"<<nl<<nl<<exit(FatalError);
   }
+  */
 }
 
 void Foam::calcTypes::fieldMap2D::write_Ccup
@@ -1159,10 +1161,12 @@ void Foam::calcTypes::fieldMap2D::write_surf
       }
     }  
   }
+  /*
   else
   {
     FatalError<<"There is no C field"<<nl<<nl<<exit(FatalError);
   }
+  */
 }
 
 
