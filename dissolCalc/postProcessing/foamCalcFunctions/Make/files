@@ -10,7 +10,7 @@ field/randomise/randomise.C
 field/interpolate/interpolate.C
 
 field/volIntegral/volIntegral.C
-
+field/minMaxValuePosition/minMaxValuePosition.C
 basic/addSubtract/addSubtract.C
 
 dissol/ellipse/ellipse.C

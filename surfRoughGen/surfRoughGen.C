@@ -125,34 +125,71 @@ public:
     double Lmaj = maxMaj - minMaj;
     
     int mveDir = 3 - (latDir + majDir);
-
-    forAll(pointFace, i)
+    
+    if(wayToApply=="internalCylinder")
     {
-      scalar curLat = pointFace[i].component(latDir) - minLat;
-      scalar curMaj = pointFace[i].component(majDir) - minMaj;
-
-      scalar sign = normlFace[i].component(mveDir) 
-              / 
-              mag(normlFace[i].component(mveDir));
-
-      int curm = std::floor(curMaj / Lmaj * (M-1));
-      int curn = std::floor(curLat / Llat * (N-1));
-      int ind = curn + N * curm;
-
-      if(wayToApply=="symmetric" || wayToApply=="oneSurface")
-        wd[i] = sFn[ind];
-
-      if(wayToApply=="synchronous")
-        wd[i] = sign * sFn[ind];
-
-      if(wayToApply=="asymmetric")
+      // TODO this is just a quick solution, make it general
+      scalar cL = constant::mathematical::pi * 198.0;
+      forAll(pointFace, i)
       {
-        if(sign<0)
-          wd[i] = sFn[ind];
-        else
-          wd[i] = sFp[ind];
+        double x,y;
+        x = pointFace[i].x();
+        y = pointFace[i].y();
+        
+        scalar phi = Foam::atan2(y,x);
+        phi /= constant::mathematical::twoPi;
+        if(phi<0) phi += 1.0;
+        
+        scalar curMaj = pointFace[i].z();
+        
+        if(curMaj<cL)
+        {
+          int curm = std::floor(curMaj / cL * (M-1));
+          int curn = std::floor(phi * (N-1));
+          int ind = curn + N * curm;
+          wd[i] = sFn[ind] * ( 1 - curMaj / cL );
+        }
       }
     }
+    else
+    {
+      forAll(pointFace, i)
+      {
+        scalar curMaj = pointFace[i].component(majDir) - minMaj;
+        scalar curLat = pointFace[i].component(latDir) - minLat;
+
+        scalar sign = normlFace[i].component(mveDir) 
+                / 
+                mag(normlFace[i].component(mveDir));
+
+        int curm = std::floor(curMaj / Lmaj * (M-1));
+        int curn = std::floor(curLat / Llat * (N-1));
+        int ind = curn + N * curm;
+
+        if(wayToApply=="symmetric" || wayToApply=="oneSurface")
+          wd[i] = sFn[ind];
+
+        if(wayToApply=="oneSurfaceDecay")
+        {
+          //wd[i] = sFn[ind];
+          double factor = ( 1 - curMaj / Llat );
+          if( factor<0.0 ) factor = 0.0;
+          wd[i] = sFn[ind] * factor;
+        }
+        
+        if(wayToApply=="synchronous")
+          wd[i] = sign * sFn[ind];
+
+        if(wayToApply=="asymmetric")
+        {
+          if(sign<0)
+            wd[i] = sFn[ind];
+          else
+            wd[i] = sFp[ind];
+        }
+      }
+    }
+    Info<<"Displacement calculated"<<nl;
   }
 
 private:
@@ -371,6 +408,13 @@ int main(int argc, char *argv[])
   
   // Get patch ID for boundaries we want to move ("walls" "inlet")
   label wallID  = mesh.boundaryMesh().findPatchID(patchName);
+  if( wallID==-1 ){
+    SeriousErrorIn("main")
+        <<"patch "
+        <<patchName
+        <<" is missing"
+        <<exit(FatalError);
+  }
   
   coupledPatchInterpolation patchInterpolator( mesh.boundaryMesh()[wallID], mesh );
   

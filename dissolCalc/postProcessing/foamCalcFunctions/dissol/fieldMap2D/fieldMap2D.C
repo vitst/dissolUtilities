@@ -105,6 +105,13 @@ void Foam::calcTypes::fieldMap2D::preCalc
           << exit(FatalError);
   }
   
+  if( !dict.readIfPresent<word>("geometry", geometry) )
+  {
+    SeriousErrorIn("preCalc")
+          << "There is no geometry parameter in fieldMap2Ddict dictionary"
+          << exit(FatalError);
+  }
+  
   point minPoint;
   if( !dict.readIfPresent<point>("minPoint", minPoint) )
   {
@@ -196,6 +203,7 @@ void Foam::calcTypes::fieldMap2D::preCalc
           <<nl
           <<"Post-processing parameters:"<<nl
           <<"patchName:                 "<< patchName<<nl
+          <<"geometry:                  "<< geometry<<nl
           <<"minPoint:                  "<< minPoint<<nl
           <<"maxPoint:                  "<< maxPoint<<nl
           <<"major direction:           "<< majDir<<nl
@@ -205,7 +213,16 @@ void Foam::calcTypes::fieldMap2D::preCalc
           <<"number of integration points: "<< numberOfIntegrationPoints
           <<endl;
   
-          
+  if
+  (
+    processingType_!="ccAll" && geometry == "concentricCylinders"
+  )
+  {
+    SeriousErrorIn("preCalc")
+          << "Concentric cylinders geometry should have proc type ccAll"
+          << exit(FatalError);
+  }
+
   N1_ = N_+1;
   M1_ = M_+1;
   K_  = numberOfIntegrationPoints;
@@ -246,17 +263,39 @@ void Foam::calcTypes::fieldMap2D::preCalc
   //minPosY = min( allPoints.component(vector::Y) );
   //minPosZ = min( allPoints.component(vector::Z) );
   
-  minPosMaj = minPoint.component(majDir);
-  minPosLat = minPoint.component(latDir);
-  minPosInt = minPoint.component(intDir);
+  if(geometry=="flat")
+  {
+    minPosMaj = minPoint.component(majDir);
+    minPosLat = minPoint.component(latDir);
+    minPosInt = minPoint.component(intDir);
+
+    maxPosMaj = maxPoint.component(majDir);
+    maxPosLat = maxPoint.component(latDir);
+    maxPosInt = maxPoint.component(intDir);
+
+    // z becomes x; x becomes y
+    dx = (maxPosMaj - minPosMaj) / static_cast<scalar>(N_);
+    dy = (maxPosLat - minPosLat) / static_cast<scalar>(M_);
+  }
+  else if(geometry=="concentricCylinders")
+  {
+    minPosMaj = minPoint.component(majDir);
+    minPosLat = 0.0;
+    minPosInt = 0.0;
+
+    maxPosMaj = maxPoint.component(majDir);
+    maxPosLat = constant::mathematical::twoPi;
+    maxPosInt = maxPoint.component(intDir);
+
+    // in case of concentric cylinders we go around the circle
+    dx = (maxPosMaj - minPosMaj) / static_cast<scalar>(N_);
+    dy = (maxPosLat - minPosLat) / static_cast<scalar>(M_);
+  }
+  else
+  {
+    FatalError<<"Unknown geometry"<<nl<<exit(FatalError);
+  }
   
-  maxPosMaj = maxPoint.component(majDir);
-  maxPosLat = maxPoint.component(latDir);
-  maxPosInt = maxPoint.component(intDir);
-  
-  // z becomes x; x becomes y
-  dx = (maxPosMaj - minPosMaj) / static_cast<scalar>(N_);
-  dy = (maxPosLat - minPosLat) / static_cast<scalar>(M_);
   
   // calculate the size of the current pattern being not bigger then 10^7
   thisTimeSize = min(N1M1, maxNumProcPoints);
@@ -290,15 +329,17 @@ void Foam::calcTypes::fieldMap2D::calc
   else if(processingType_ == "U")
     Info << "Processing the flux qx and qy..." << endl;
   else if(processingType_ == "p")
-    FatalError<<"p processing is not implemented yet "<<nl<<nl<<exit(FatalError);
+    FatalError<<"p processing is not implemented yet"<<nl<<exit(FatalError);
   else if(processingType_ == "C")
     Info << "Processing the concentration field..." << endl;
   else if(processingType_ == "csurf")
     Info << "Calculating concentration on the surface" << endl;
   else if(processingType_ == "temp")
     Info << "Running temporary function..." << endl;
+  else if(processingType_ == "ccAll")
+    Info << "Processing all fields for concentric cylinder geometry" << endl;
   else
-    FatalError<<"Unable to process "<<processingType_<<nl<<nl<<exit(FatalError);
+    FatalError<<"Unable to process "<<processingType_<<nl<<exit(FatalError);
   
   for(int cI=0; cI<totNumLoop; cI++)
   {
@@ -313,7 +354,15 @@ void Foam::calcTypes::fieldMap2D::calc
     Info << "Find the points on the surface"<<nl;
     pointsXYonsurface.clear();
     pointsXYonsurface.setSize( expNI * sizeAA );
-    build_surface_points( mesh );
+    
+    if(geometry=="flat")
+    {
+      build_surface_points( mesh );
+    }
+    else if(geometry=="concentricCylinders")
+    {
+      build_surface_pointsCC( mesh );
+    }
     Info << "build_surface_points done"<<nl;
     
     fileName current_dissolCalc_dir;
@@ -343,6 +392,9 @@ void Foam::calcTypes::fieldMap2D::calc
     }
     else if(processingType_ == "temp"){
       write_temp(mesh, runTime);
+    }
+    else if(processingType_ == "ccAll"){
+      write_ccAll(mesh, runTime);
     }
     else{
       FatalError<<"Unable to process "<<processingType_<<nl<<nl<<exit(FatalError);
@@ -515,6 +567,78 @@ void Foam::calcTypes::fieldMap2D::build_surface_points
   }
 }
 
+void Foam::calcTypes::fieldMap2D::build_surface_pointsCC
+(
+  const fvMesh& mesh
+)
+{
+  // triangulation
+  // @TODO in case of parallel calculations see surfaceMeshTriangulate.C
+  // @TODO add the error handling for "walls"
+  label patchID = mesh.boundaryMesh().findPatchID(patchName);
+  
+  if(patchID==-1)
+  {
+    SeriousErrorIn("build_surface_points")
+            <<"There is no "
+            << patchName
+            << exit(FatalError);
+  }
+  
+  labelHashSet includePatches(1);
+  includePatches.insert(patchID);
+  
+  triSurface wallTriSurface
+  (
+    triSurfaceTools::triangulate( mesh.boundaryMesh(), includePatches )
+  );
+  
+  // intersection
+  const triSurfaceSearch querySurf(wallTriSurface);
+  const indexedOctree<treeDataTriSurface>& tree = querySurf.tree();
+  
+  scalar curMaj = 0.0;
+  scalar curLat = 0.0;
+  
+  // N+1 and M+1 because we need points at x=minPosX and x=maxPosX
+  for(int ijk=0; ijk<sizeAA; ijk++)
+  {
+    int totIJK = ijk + curNum * thisTimeSize;
+    label i = totIJK / M1_;
+    label j = totIJK % M1_;
+    curMaj = minPosMaj + i*dx;
+    curLat = minPosLat + j*dy; // here it is an angle [0;2Pi]
+    label ind = ijk;
+      
+    point searchStart;
+    searchStart.component(majDir) = curMaj;
+    searchStart.component(latDir) = 0.0;
+    searchStart.component(intDir) = 0.0;
+    
+    
+    point searchEnd = searchStart;
+    searchEnd.component(intDir) = maxPosInt +
+            mag(maxPosInt-minPosInt)/(maxPosInt-minPosInt);
+    
+    searchEnd.component(latDir) = maxPosInt * Foam::cos(curLat);
+    searchEnd.component(intDir) = maxPosInt * Foam::sin(curLat);
+
+    point hitPoint(0.0, 0.0, 0.0);
+    
+    pointIndexHit pHit = tree.findLine(searchStart, searchEnd);
+    
+    if ( pHit.hit() )
+    {
+      hitPoint = pHit.hitPoint();
+    }
+    
+    label hitWallLabel = expNI*ind;
+    
+    pointsXYonsurface[hitWallLabel] = hitPoint;
+  }
+}
+
+
 
 
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -653,7 +777,7 @@ void Foam::calcTypes::fieldMap2D::write_q
       IOobject::MUST_READ
   );
   
-  if (headerU.headerOk())
+  //if (headerU.headerOk())
   {
     fieldU field_u(headerU, mesh);
 
@@ -761,10 +885,12 @@ void Foam::calcTypes::fieldMap2D::write_q
       }
     }  
   }
+  /*
   else
   {
     FatalError<<"There is no U field"<<nl<<nl<<exit(FatalError);
   }
+  */
 }
 
 void Foam::calcTypes::fieldMap2D::write_Ccup
@@ -791,7 +917,7 @@ void Foam::calcTypes::fieldMap2D::write_Ccup
       IOobject::MUST_READ
   );
   
-  if (headerU.headerOk() && headerC.headerOk())
+  //if (headerU.headerOk() && headerC.headerOk())
   {
     fieldU field_u(headerU, mesh);
     fieldC field_c(headerC, mesh);
@@ -918,6 +1044,8 @@ void Foam::calcTypes::fieldMap2D::write_Ccup
       }
     }  
   }
+  
+  /*
   else if( !headerU.headerOk() && headerC.headerOk() )
   {
     FatalError<<"There is no U field"<<nl<<nl<<exit(FatalError);
@@ -930,6 +1058,7 @@ void Foam::calcTypes::fieldMap2D::write_Ccup
   {
     FatalError<<"There is no U and C field"<<nl<<nl<<exit(FatalError);
   }
+  */
 }
 
 
@@ -950,7 +1079,7 @@ void Foam::calcTypes::fieldMap2D::write_surf
       IOobject::MUST_READ
   );
   
-  if (headerC.headerOk())
+  //if (headerC.headerOk())
   {
     fieldC field_c(headerC, mesh);
 
@@ -1032,10 +1161,12 @@ void Foam::calcTypes::fieldMap2D::write_surf
       }
     }  
   }
+  /*
   else
   {
     FatalError<<"There is no C field"<<nl<<nl<<exit(FatalError);
   }
+  */
 }
 
 
@@ -1063,7 +1194,7 @@ void Foam::calcTypes::fieldMap2D::write_int
       IOobject::MUST_READ
   );
   
-  if (headerU.headerOk() && headerC.headerOk())
+  //if (headerU.headerOk() && headerC.headerOk())
   {
     fieldU field_u(headerU, mesh);
     fieldC field_c(headerC, mesh);
@@ -1205,6 +1336,7 @@ void Foam::calcTypes::fieldMap2D::write_int
       }
     }  
   }
+  /*
   else if( !headerU.headerOk() && headerC.headerOk() )
   {
     FatalError<<"There is no U field"<<nl<<nl<<exit(FatalError);
@@ -1217,6 +1349,7 @@ void Foam::calcTypes::fieldMap2D::write_int
   {
     FatalError<<"There is no U and C field"<<nl<<nl<<exit(FatalError);
   }
+  */
 }
 
 void Foam::calcTypes::fieldMap2D::write_all
@@ -1243,7 +1376,7 @@ void Foam::calcTypes::fieldMap2D::write_all
       IOobject::MUST_READ
   );
   
-  if (headerU.headerOk() && headerC.headerOk())
+  //if (headerU.headerOk() && headerC.headerOk())
   {
     fieldU field_u(headerU, mesh);
     fieldC field_c(headerC, mesh);
@@ -1405,6 +1538,7 @@ void Foam::calcTypes::fieldMap2D::write_all
       }
     }  
   }
+  /*
   else if( !headerU.headerOk() && headerC.headerOk() )
   {
     FatalError<<"There is no U field"<<nl<<nl<<exit(FatalError);
@@ -1417,6 +1551,218 @@ void Foam::calcTypes::fieldMap2D::write_all
   {
     FatalError<<"There is no U and C field"<<nl<<nl<<exit(FatalError);
   }
+  */
+}
+
+void Foam::calcTypes::fieldMap2D::write_ccAll
+(
+  const fvMesh& mesh,
+  const Time& runTime
+)
+{
+  typedef GeometricField<vector, fvPatchField, volMesh> fieldU;
+  typedef GeometricField<scalar, fvPatchField, volMesh> fieldC;
+
+  IOobject headerU
+  (
+      "U",
+      runTime.timeName(),
+      mesh,
+      IOobject::MUST_READ
+  );
+  IOobject headerC
+  (
+      "C",
+      runTime.timeName(),
+      mesh,
+      IOobject::MUST_READ
+  );
+  
+  //if (headerU.headerOk() && headerC.headerOk())
+  {
+    fieldU field_u(headerU, mesh);
+    fieldC field_c(headerC, mesh);
+
+    fileName current_file_path_cup =
+            "postProcessing/dissolCalc" / runTime.timeName() / "c";
+    fileName current_file_path_qx, current_file_path_qy;
+    current_file_path_qx =
+            "postProcessing/dissolCalc" / runTime.timeName() / "qx";
+    current_file_path_qy =
+            "postProcessing/dissolCalc" / runTime.timeName() / "qy";
+    fileName current_file_path_h =
+            "postProcessing/dissolCalc" / runTime.timeName() / "h";
+    fileName current_file_path_csurf =
+            "postProcessing/dissolCalc" / runTime.timeName() / "csurf";
+  
+    autoPtr<interpolation<vector> >interpolatorU
+    (
+      interpolation<vector>::New("cellPoint",field_u)
+    );
+    autoPtr<interpolation<scalar> >interpolatorC
+    (
+      interpolation<scalar>::New("cellPoint",field_c)
+    );
+
+    ios_base::openmode mode =
+            (curNum==0) ? 
+              ios_base::out|ios_base::trunc : 
+              ios_base::out|ios_base::app;  
+    
+    OFstreamMod mapXYccup( current_file_path_cup, mode );
+    OFstreamMod mapXYqx( current_file_path_qx, mode );
+    OFstreamMod mapXYqy( current_file_path_qy, mode );
+    OFstreamMod mapXYcsurf( current_file_path_csurf, mode);
+    OFstreamMod apertureMapFile( current_file_path_h, mode);
+    
+    if(curNum==0)
+    {
+      double dyL = dy * maxPosInt;
+      mapXYccup << N_ << "   " << M_ << "   " << runTime.value() 
+              << "   " << dx << "   " << dyL << endl;
+      mapXYcsurf << N_ << "   " << M_ << "   " << runTime.value() 
+              << "   " << dx << "   " << dyL << endl;
+      mapXYqx << N_ << "   " << M_ << "   " << runTime.value()
+              << "   " << dx << "   " << dyL << endl;
+      mapXYqy << N_ << "   " << M_ << "   " << runTime.value()
+              << "   " << dx << "   " << dyL << endl;
+      apertureMapFile << N_ << "   " << M_ << "   " << runTime.value() 
+              << "   " << dx << "   " << dyL << endl;
+    }
+    
+    meshSearch searchEngine(mesh);
+        
+    int count = 0;
+    int iSurf = 0;
+    while (iSurf<pointsXYonsurface.size() )
+    {
+      point first = pointsXYonsurface[iSurf];
+      point second = first;
+
+      int totIJK = iSurf + curNum * thisTimeSize;
+      label j = totIJK % M1_;
+      scalar angle = minPosLat + j*dy;
+      
+      second.component(latDir) = maxPosInt * Foam::cos(angle);
+      second.component(intDir) = maxPosInt * Foam::sin(angle);
+      
+      vector dirc =  second - first;
+      
+      scalar dist = mag( dirc );
+      
+      Info<<"  f: "<<first<<"  s: "<<second<<endl;
+      
+      scalar csurf = 0.0;
+      scalar integratedUx = 0.0;
+      scalar integratedUy = 0.0;
+      scalar integratedUCx = 0.0;
+      scalar integratedUCy = 0.0;
+      scalar Ccup = 0.0;
+      if( mag(dirc) > SMALL )
+      {
+        scalarField variable(K1_);
+        scalarField Ux(K1_);
+        scalarField Uy(K1_);
+        scalarField UCx(K1_);
+        scalarField UCy(K1_);
+        
+        vector dr = 1.0 / static_cast<scalar>(K_) * dirc;
+        scalar magDr = mag(dr);
+        
+        vector flDir = vector::zero;
+        flDir.component(majDir) = 1.0;
+        vector tan = flDir ^ dr;
+        tan = tan / mag(tan);
+
+        for(int i=0; i<K1_; i++)
+        {
+          point samp_point = first + i*dr;
+          label cellI = searchEngine.findCell( samp_point );
+          if (cellI==-1)
+          {
+            cellI = searchEngine.findNearestCell( samp_point );
+          }
+          label faceI = -1;
+
+          vector interp_fieldU =
+                  interpolatorU->interpolate(samp_point, cellI, faceI);
+          // velocity = 0 on the surface
+          if(i==0 || i==K_)
+          {
+            interp_fieldU = vector::zero;
+          }
+          
+          variable[i] = i * magDr;
+          Ux[i] = interp_fieldU & dr / magDr;
+          Uy[i] = interp_fieldU & tan;  // tan is already normalized
+          
+          scalar interp_fieldC = 
+                  interpolatorC->interpolate(samp_point, cellI, faceI);
+          UCx[i] = Ux[i] * interp_fieldC;
+          UCy[i] = Uy[i] * interp_fieldC;
+          if(i==K_)
+          {
+            csurf = interp_fieldC;
+          }
+        }
+        
+        integratedUx = primitive_simpson_integration(variable, Ux);
+        integratedUy = primitive_simpson_integration(variable, Uy);
+        integratedUCx = primitive_simpson_integration(variable, UCx);
+        integratedUCy = primitive_simpson_integration(variable, UCy);
+        scalar qSqr = integratedUx*integratedUx+integratedUy*integratedUy;
+        if( qSqr > SMALL )
+        {
+          Ccup = std::sqrt
+                 (
+                  (integratedUCx*integratedUCx+integratedUCy*integratedUCy)
+                  /
+                  qSqr
+                 );
+        }
+      }
+      
+      int ind1 = iSurf + curBlock;
+      int prcnt  = 100 * (ind1    ) / N1M1;
+      int prcnt1 = 100 * (ind1 - 1) / N1M1;
+      if( prcnt%1==0 && prcnt!=prcnt1 )
+      {
+        Info<<"\r"<< prcnt << "%  "<<flush;
+      }
+      
+      mapXYccup << Ccup << "  ";
+      mapXYcsurf << csurf << "  ";
+      mapXYqx << integratedUx << "  ";
+      mapXYqy << integratedUy << "  ";
+      apertureMapFile << dist << "  ";
+
+      iSurf += expNI;
+      count++;
+      if(count >= NUMBER_OF_COLUMNS)
+      { 
+        mapXYccup <<"\n";
+        mapXYcsurf <<"\n";
+        mapXYqx <<"\n";
+        mapXYqy <<"\n";
+        apertureMapFile <<"\n";
+        count=0;
+      }
+    }  
+  }
+  /*
+  else if( !headerU.headerOk() && headerC.headerOk() )
+  {
+    FatalError<<"There is no U field"<<nl<<nl<<exit(FatalError);
+  }
+  else if( headerU.headerOk() && !headerC.headerOk() )
+  {
+    FatalError<<"There is no C field"<<nl<<nl<<exit(FatalError);
+  }
+  else
+  {
+    FatalError<<"There is no U and C field"<<nl<<nl<<exit(FatalError);
+  }
+  */
 }
 
 
