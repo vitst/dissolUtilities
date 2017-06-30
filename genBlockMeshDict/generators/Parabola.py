@@ -1,28 +1,28 @@
 import os, sys
 import numpy as np
+import numpy.polynomial.polynomial as poly
 import genBlockMesh as gbm
 
 __author__ = 'sdale'
 
-class Triangle(gbm.AbstractBaseGenerator):
+class Parabola(gbm.AbstractBaseGenerator):
   '''
-  This is the generator for triangular objects.
-  The object is an isoscelles triangle, symmetric about the x axis.
+  This is the generator for a parabolic object.
+  The object is a parabola, symmetric about the x axis.
   '''
 
   def __init__(self):
-    self.__genName__ = 'triangle'
+    self.__genName__ = 'parabola'
 
     # an array of parameters for current generator
     self.parameters = []
 
     # the format for parameters: [name, initial_value, description]
-    self.parameters.append(['x_len', 24., 'perpendicular length'])
-    self.parameters.append(['y_len', 16., 'base length'])
-    self.parameters.append(['x_res', 200, 'number of cells in X direction'])
-    self.parameters.append(['y_res', 200, 'number of cells in Y direction'])
+    self.parameters.append(['x_len', 26., 'perpendicular length'])
+    self.parameters.append(['x_res', 4000, 'number of cells in X direction'])
+    self.parameters.append(['y_res', 100, 'number of cells in Y direction'])
     self.parameters.append(['z_res', 1, 'number of cells in Z direction'])
-    self.parameters.append(['x_G',   1.0, 'grading in X direction'])
+    self.parameters.append(['x_G',   2.0, 'grading in X direction'])
     self.parameters.append(['y_G',   1.0, 'grading in Y direction'])
     self.parameters.append(['z_G',   1.0, 'grading in Z direction'])
 
@@ -30,7 +30,6 @@ class Triangle(gbm.AbstractBaseGenerator):
   	# read parameters
     lines = self.read_dict(dictFileName)
     empty, x_len = self.check_par('x_len', lines)
-    empty, y_len = self.check_par('y_len', lines)
     empty, x_res = self.check_par('x_res', lines)
     empty, y_res = self.check_par('y_res', lines)
     empty, z_res = self.check_par('z_res', lines)
@@ -48,34 +47,37 @@ class Triangle(gbm.AbstractBaseGenerator):
     fileCont += 'vertices\n'
     fileCont += '(\n'
 
-    xmax = 2.0 + 3.0 * np.sqrt(3.0)
-    ymax = 6.0
-    x = np.linspace(0.0, xmax, 600)
+    xmin = 11                           # Set apex of parabola
+    rho  = 3                            # Curvature
+    xmax = xmin + x_len
+    x = np.arange(0.5, x_res)*x_len/x_res
     y = []
 
+    R  = 1
+    X  = x_len - R
+    xt = X - poly.polyroots(np.array([R*R, 0, -(2*rho*X+1), 2*rho]))[1]
+    Y  = np.sqrt(2*xt/rho) - np.sqrt(R*R - (xt-X)*(xt-X))
+    y_len = Y
     for xi in x:
-      yi = 0.0
-      if xi<0.5:
-        yi = 0.0 + np.sqrt( 1.0 - np.power( xi-1.0, 2) )
-      elif xi>=0.5 and xi<= (0.5+3*np.sqrt(3.0)):
-        yi = (xi - 0.5) * np.tan( np.pi / 6.0 ) + 1.0 * np.cos(np.pi/6.0)
-      else:
-        yi = 3.0 + np.sqrt( 1.0 - np.power( xi-1.0-3*np.sqrt(3.0), 2) )
-      y.append(yi)
+        if xi < xt:
+            yi = np.sqrt(2*xi/rho)
+        else:
+            yi = Y + np.sqrt(R*R - (xi-X)*(xi-X))
+        y.append(yi)
 
+    x = x + xmin
     y = np.array(y, float)
-    x = x*x_len/xmax
-    y = y*y_len/ymax
+
 
     #Lowest plane
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(     0,        0,-0.5)   # 0
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format( x_len, -y_len/2,-0.5)   # 1
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format( x_len,  y_len/2,-0.5)   # 2
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(xmin,        0,-0.5)   # 0
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(xmax, -y_len/2,-0.5)   # 1
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(xmax,  y_len/2,-0.5)   # 2
 
     #Highest plane
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(     0,        0, 0.5)   # 3
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format( x_len, -y_len/2, 0.5)   # 4
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format( x_len,  y_len/2, 0.5)   # 5
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(xmin,        0, 0.5)   # 3
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(xmax, -y_len/2, 0.5)   # 4
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(xmax,  y_len/2, 0.5)   # 5
 
     fileCont += ');\n'
 
@@ -87,7 +89,7 @@ class Triangle(gbm.AbstractBaseGenerator):
     fileCont += 'edges\n'
     fileCont += '(\n'
     
-    #******Triangle******
+    #******Parabola******
     fileCont += '    spline 0 1 (\n'
     for i in range(len(x)):
       fileCont += '        ({0:8g} {1:8g} {2:8g})\n'.format( x[i], -y[i],-0.5)
@@ -120,7 +122,7 @@ class Triangle(gbm.AbstractBaseGenerator):
 
     #####################################################################################
     #block 0
-    fileCont += '    hex (0  1  2  0   3   4  5  3) ({0:d} {1:d} {2:d})\n' \
+    fileCont += '    hex (0  1  2  0  3  4  5  3) ({0:d} {1:d} {2:d})\n' \
                 '      simpleGrading (\n' \
                 '        {3:g}\n' \
                 '        {4:g}\n' \

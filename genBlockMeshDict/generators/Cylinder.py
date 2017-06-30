@@ -17,18 +17,18 @@ class Cylinder(gbm.AbstractBaseGenerator):
     self.parameters = []
 
     # the format for parameters: [name, initial_value, description]
-    self.parameters.append(['x_rect',  0.75, 'size of the rectangular prism in x direction'])
-    self.parameters.append(['y_rect',  0.25, 'size of the rectangular prism in y direction'])
-    self.parameters.append(['Lz',  500.0, 'size of the fracture in Z direction'])
-    self.parameters.append(['x_res', 16, 'number of cells in X direction'])
-    self.parameters.append(['y_res', 8, 'number of cells in Y direction'])
-    self.parameters.append(['z_res', 512, 'number of cells in Z direction'])
-    self.parameters.append(['x_G',   1.0, 'grading in X direction'])
-    self.parameters.append(['y_G',   10.0, 'grading in Y direction'])
-    self.parameters.append(['z_G',   10.0, 'grading in Z direction'])
-    self.parameters.append(['n_surf',   32, 'number of points on the edges of the cylinder'])
-    self.parameters.append(['beta',   1.0, 'Y direction elliptical radius'])
-    self.parameters.append(['alpha',   1.5, 'X direction elliptical radius'])
+    self.parameters.append(['x_rect',  5, 'size of the rectangular prism in x direction'])
+    self.parameters.append(['y_rect',  5, 'size of the rectangular prism in y direction'])
+    self.parameters.append(['Lz',  1, 'size of the fracture in Z direction'])
+    self.parameters.append(['x_res', 128, 'number of cells in X direction'])
+    self.parameters.append(['y_res', 128, 'number of cells in Y direction'])
+    self.parameters.append(['z_res', 1, 'number of cells in Z direction'])
+    self.parameters.append(['x_G',   1, 'grading in X direction'])
+    self.parameters.append(['y_G',   1, 'grading in Y direction'])
+    self.parameters.append(['z_G',   1, 'grading in Z direction'])
+    self.parameters.append(['n_surf',256, 'number of points on the edges of the cylinder'])
+    self.parameters.append(['beta',   10, 'Y direction elliptical radius'])
+    self.parameters.append(['alpha',  10, 'X direction elliptical radius'])
 
   def ellipsoid_function(self, theta, delt, axis):
     alpha = self.parameters[11][1]
