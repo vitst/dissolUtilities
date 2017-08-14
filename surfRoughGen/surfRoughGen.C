@@ -43,12 +43,10 @@ Needs dictionary
 
 #include <complex>
 #include <fftw3.h>
-
 #include "fvCFD.H"
 #include "dynamicFvMesh.H"
 #include "coupledPatchInterpolation.H"
 #include "pointPatchField.H"
-//#include "meshRelax.H"
 
 /*
  #######################################################################################
@@ -65,7 +63,7 @@ protected:
   int N;
   double rgh;
   word wayToApply;
-  double fractalParam; // Set Hausdorff dimension H = 3 - D_f
+  double dHauss;        // Fractal dimension D = 3 - dHauss
   double smoothing;
   
 public:
@@ -78,7 +76,7 @@ public:
     int N_,
     double rgh_,
     word wayToApply_,
-    double fractalParam_,
+    double dHauss_,
     double smoothing_
   )
   :
@@ -87,7 +85,7 @@ public:
     N(N_),
     rgh(rgh_),
     wayToApply(wayToApply_),
-    fractalParam(fractalParam_),
+    dHauss(dHauss_),
     smoothing(smoothing_)
   {
   }
@@ -96,9 +94,9 @@ public:
   (
     dynamicFvMesh& mesh,
     scalarField& wd,
-    label& wallID,
+    label& patchID,
     int majDir,
-    int latDir
+    int minDir
   )
   {
     scalarField sFn(M*N, 0.0);
@@ -115,16 +113,16 @@ public:
       sFp = sFn;
     }
 
-    pointField pointFace = mesh.boundaryMesh()[wallID].faceCentres();
-    pointField normlFace = mesh.boundaryMesh()[wallID].faceNormals();
+    pointField pointFace = mesh.boundaryMesh()[patchID].faceCentres();
+    pointField normlFace = mesh.boundaryMesh()[patchID].faceNormals();
     scalar maxMaj = max( pointFace.component(majDir) );
-    scalar maxLat = max( pointFace.component(latDir) );
+    scalar maxLat = max( pointFace.component(minDir) );
     scalar minMaj = min( pointFace.component(majDir) );
-    scalar minLat = min( pointFace.component(latDir) );
+    scalar minLat = min( pointFace.component(minDir) );
     double Llat = maxLat - minLat;
     double Lmaj = maxMaj - minMaj;
     
-    int mveDir = 3 - (latDir + majDir);
+    int mveDir = 3 - (minDir + majDir);
     
     if(wayToApply=="internalCylinder")
     {
@@ -156,7 +154,7 @@ public:
       forAll(pointFace, i)
       {
         scalar curMaj = pointFace[i].component(majDir) - minMaj;
-        scalar curLat = pointFace[i].component(latDir) - minLat;
+        scalar curLat = pointFace[i].component(minDir) - minLat;
 
         scalar sign = normlFace[i].component(mveDir) 
                 / 
@@ -189,7 +187,7 @@ public:
         }
       }
     }
-    Info<<"Displacement calculated"<<nl;
+    Info << "Displacement calculated" << nl;
   }
 
 private:
@@ -198,7 +196,7 @@ private:
   
   scalar pspec(int u)
   {
-    scalar p = Foam::pow(u, -0.5 * (fractalParam+1) );
+    scalar p = Foam::pow(u, -0.5 * (dHauss+1) );
     p *= Foam::exp(-smoothing*u);
     return p;
   }
@@ -207,15 +205,15 @@ private:
   {
     unsigned int MN = M*N;
 
-    if ( MN & (MN - 1) )
-    {
-        FatalErrorIn
-        (
-             "getSurfaceDisplacement  "
-        )   << "number of elements is not a power of 2" << endl
-            << "    Number of elements = " << MN
-            << abort(FatalError);
-    }
+//    if ( MN & (MN - 1) )
+//    {
+//        FatalErrorIn
+//        (
+//             "getSurfaceDisplacement  "
+//        )    <<  "number of elements is not a power of 2"  <<  endl
+//             <<  "    Number of elements = "  <<  MN
+//             <<  abort(FatalError);
+//    }
 
     std::vector<std::complex<double> > f, F;
     f.resize(MN);
@@ -224,7 +222,7 @@ private:
     Random rnd( seed );
     scalar TwoPi = constant::mathematical::twoPi;
 
-    Info<< "Displacement calc starts...."<<nl;
+    Info <<  "Displacement calc starts...." << nl;
     /*
      *   --- ---
      *  | 1 | 2 |
@@ -321,118 +319,112 @@ int main(int argc, char *argv[])
     )
   );
   
+  word wayToApply;
+  if( !surfRoughGenDict.readIfPresent<word>("apply", wayToApply) ){
+    SeriousErrorIn("main")
+         << "There is no `synchronous` parameter in dictionary"
+         << exit(FatalError);
+  }
   word patchName;
   if( !surfRoughGenDict.readIfPresent<word>("patchName", patchName) )
   {
     SeriousErrorIn("main")
-        << "There is no `patchName` parameter in surfRoughGenDict dictionary"
-        << exit(FatalError);
-  }
-  
-  int seed;
-  if( !surfRoughGenDict.readIfPresent<int>("seed", seed) ){
-    SeriousErrorIn("main")
-        <<"There is no `seed` parameter in surfRoughGenDict dictionary"
-        <<exit(FatalError);
-  }
-
-  int M;
-  if( !surfRoughGenDict.readIfPresent<int>("sizeMaj", M) ){
-    SeriousErrorIn("main")
-        <<"There is no `sizeMaj` parameter in surfRoughGenDict dictionary"
-        <<exit(FatalError);
-  }
-  int N;
-  if( !surfRoughGenDict.readIfPresent<int>("sizeLat", N) ){
-    SeriousErrorIn("main")
-        <<"There is no `sizeLat` parameter in surfRoughGenDict dictionary"
-        <<exit(FatalError);
+         <<  "There is no `patchName` parameter in dictionary"
+         <<  exit(FatalError);
   }
   
   int majDir;
   if( !surfRoughGenDict.readIfPresent<int>("majDir", majDir) ){
     SeriousErrorIn("main")
-        <<"There is no `majDir` parameter in surfRoughGenDict dictionary"
-        <<exit(FatalError);
+         << "There is no `majDir` parameter in dictionary"
+         << exit(FatalError);
   }
-  int latDir;
-  if( !surfRoughGenDict.readIfPresent<int>("latDir", latDir) ){
+  int minDir;
+  if( !surfRoughGenDict.readIfPresent<int>("minDir", minDir) ){
     SeriousErrorIn("main")
-        <<"There is no `latDir` parameter in surfRoughGenDict dictionary"
-        <<exit(FatalError);
+         << "There is no `minDir` parameter in dictionary"
+         << exit(FatalError);
+  }
+  int M;
+  if( !surfRoughGenDict.readIfPresent<int>("majSize", M) ){
+    SeriousErrorIn("main")
+         << "There is no `majSize` parameter in dictionary"
+         << exit(FatalError);
+  }
+  int N;
+  if( !surfRoughGenDict.readIfPresent<int>("minSize", N) ){
+    SeriousErrorIn("main")
+         << "There is no `minSize` parameter in dictionary"
+         << exit(FatalError);
   }
   
+  
+  int seed;
+  if( !surfRoughGenDict.readIfPresent<int>("seed", seed) ){
+    SeriousErrorIn("main")
+         << "There is no `seed` parameter in dictionary"
+         << exit(FatalError);
+  }
   scalar rgh;
   if( !surfRoughGenDict.readIfPresent<scalar>("roughness", rgh) ){
     SeriousErrorIn("main")
-        <<"There is no `roughness` parameter in surfRoughGenDict dictionary"
-        <<exit(FatalError);
+         << "There is no `roughness` parameter in dictionary"
+         << exit(FatalError);
   }
-  // symmetric, synchronous, asymmetric
-  word wayToApply;
-  if( !surfRoughGenDict.readIfPresent<word>("apply", wayToApply) ){
+  double dHauss;
+  if( !surfRoughGenDict.readIfPresent<double>("dHauss", dHauss) ){
     SeriousErrorIn("main")
-        <<"There is no `synchronous` parameter in surfRoughGenDict dictionary"
-        <<exit(FatalError);
+         << "There is no `dHauss` parameter in dictionary"
+         << exit(FatalError);
   }
-  
-  double fractalParam;
-  if( !surfRoughGenDict.readIfPresent<double>("fractalParam", fractalParam) ){
-    SeriousErrorIn("main")
-        <<"There is no `fractalParam` parameter in surfRoughGenDict dictionary"
-        <<exit(FatalError);
-  }
-  
   double smoothing;
   if( !surfRoughGenDict.readIfPresent<double>("smoothing", smoothing) ){
     SeriousErrorIn("main")
-        <<"There is no `smoothing` parameter in surfRoughGenDict dictionary"
-        <<exit(FatalError);
+         << "There is no `smoothing` parameter in dictionary"
+         << exit(FatalError);
   }
   
-  Info<< "Patch:      " << patchName << endl;
-  Info<< "Seed:       " << seed << endl;
-  Info<< "M:          " << M << endl;
-  Info<< "N:          " << N << endl;
-  Info<< "roughness:  " << rgh << endl;
-  Info<< "apply:      " << wayToApply << endl;
-  Info<< "fractalParam:  " << fractalParam << endl;
-  Info<< "smoothing:     " << smoothing << endl;
+  Info <<  "patch:         "  <<  patchName   <<  endl;
+  Info <<  "apply (method):"  <<  wayToApply  <<  endl;
+  Info <<  "majDir:        "  <<  majDir      <<  endl;
+  Info <<  "minDir:        "  <<  minDir      <<  endl;
+  Info <<  "majSize:       "  <<  M           <<  endl;
+  Info <<  "minSize:       "  <<  N           <<  endl;
+  Info <<  "seed:          "  <<  seed        <<  endl;
+  Info <<  "roughness:     "  <<  rgh         <<  endl;
+  Info <<  "dHauss:        "  <<  dHauss  <<  endl;
+  Info <<  "smoothing:     "  <<  smoothing   <<  endl;
+  Info <<  "Setup RoughnessGenerator class"   <<  endl;
 
-  Info<< "Setup RoughnessGenerator class" << endl;
-  RoughnessGenerator rg(seed, M, N, rgh, wayToApply, fractalParam, smoothing);
+  RoughnessGenerator rg( seed, M, N, rgh, wayToApply, dHauss, smoothing );
   
   double cpuTime = runTime.elapsedCpuTime();
-  //Info<< "Setup mesh relaxation class" << endl;
-  //meshRelax mesh_rlx(mesh, args);
   
-  // Get patch ID for boundaries we want to move ("walls" "inlet")
-  label wallID  = mesh.boundaryMesh().findPatchID(patchName);
-  if( wallID==-1 ){
+  // Get patch ID for moving boundaries
+  label patchID  = mesh.boundaryMesh().findPatchID(patchName);
+  if( patchID==-1 ){
     SeriousErrorIn("main")
-        <<"patch "
-        <<patchName
-        <<" is missing"
-        <<exit(FatalError);
+         << "patch "  << patchName  << " is missing"  << exit(FatalError);
   }
   
-  coupledPatchInterpolation patchInterpolator( mesh.boundaryMesh()[wallID], mesh );
+  coupledPatchInterpolation patchInterpolator
+    ( mesh.boundaryMesh()[patchID], mesh );
   
-  const pointField& boundaryPoints = mesh.boundaryMesh()[wallID].localPoints();
+  const pointField& boundaryPoints 
+    = mesh.boundaryMesh()[patchID].localPoints();
   vectorField pointDispWall(boundaryPoints.size(), vector::zero);
-  
-  vectorField pointNface = mesh.boundaryMesh()[wallID].faceNormals();
+  vectorField pointNface = mesh.boundaryMesh()[patchID].faceNormals();
   vectorField motionN = patchInterpolator.faceToPointInterpolate(pointNface);
   forAll(motionN, ii) motionN[ii]/=mag(motionN[ii]);
   
   scalarField faceDisp(pointNface.size(), 0.0);
-  rg.getSurfaceDisplacement(mesh, faceDisp, wallID, majDir, latDir);
+  rg.getSurfaceDisplacement(mesh, faceDisp, patchID, majDir, minDir);
   scalarField pointDisp = patchInterpolator.faceToPointInterpolate(faceDisp);
   
-  Info<<nl<< "Maximum and minimum face displacement in Y direction:"<<nl;
-  Info<<nl<< "Max: " << max(faceDisp) << "  min: "<<min(faceDisp)<<nl<<nl;
-  Info<<nl<< "Maximum and minimum point displacement in Y direction:"<<nl;
-  Info<<     "Max: " << max(pointDisp) << "  min: "<<min(pointDisp)<<nl<<nl;
+  Info <<  "Maximum and minimum face displacement" 
+       <<  max(faceDisp)  <<  "  " << min(faceDisp) << endl;
+  Info <<  "Maximum and minimum point displacement"
+       <<  max(pointDisp)  <<  " " << min(pointDisp) << endl;
   
   forAll( pointDispWall, i )
     pointDispWall[i] = pointDisp[i] * motionN[i];
@@ -447,22 +439,22 @@ int main(int argc, char *argv[])
   (
     mesh.objectRegistry::lookupObject<pointVectorField>( "pointMotionU" )
   );
-  pointVelocity.boundaryFieldRef()[wallID] == pointDispWall;
+  pointVelocity.boundaryFieldRef()[patchID] == pointDispWall;
   mesh.update();
   
   cpuTime = runTime.elapsedCpuTime() - cpuTime;
   
-  Info<<nl<<"Time statistics:"<<nl;
+  Info << nl << "Time statistics:" << nl;
   
-  int wlNP = mesh.boundaryMesh()[wallID].nPoints();
-  Info<<"Total number of points:                   "<<mesh.nPoints()<<nl;
-  Info<<"Number of points on the walls:            "<<wlNP<<nl;
-  Info<<"Running time:                             "<<cpuTime<<nl<<endl;
+  int wlNP = mesh.boundaryMesh()[patchID].nPoints();
+  Info << "Total number of points:                   " << mesh.nPoints() << nl;
+  Info << "Number of points on the walls:            " << wlNP << nl;
+  Info << "Running time:                             " << cpuTime << nl << endl;
 
-  Info<<"Overwriting points in current time directory."<<nl;
+  Info << "Overwriting points in current time directory." << nl;
   runTime.writeNow();
   
-  Info<<"End"<<nl;
+  Info << "End" << nl;
   return 0;
 }
 
