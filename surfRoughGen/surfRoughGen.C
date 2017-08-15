@@ -63,7 +63,7 @@ protected:
   int N;
   double rgh;
   word wayToApply;
-  double dHauss;        // Fractal dimension D = 3 - dHauss
+  double dHurst;        // Fractal dimension D = 3 - dHurst
   double smoothing;
   
 public:
@@ -76,7 +76,7 @@ public:
     int N_,
     double rgh_,
     word wayToApply_,
-    double dHauss_,
+    double dHurst,
     double smoothing_
   )
   :
@@ -85,7 +85,7 @@ public:
     N(N_),
     rgh(rgh_),
     wayToApply(wayToApply_),
-    dHauss(dHauss_),
+    dHurst(dHurst),
     smoothing(smoothing_)
   {
   }
@@ -196,7 +196,7 @@ private:
   
   scalar pspec(int u)
   {
-    scalar p = Foam::pow(u, -0.5 * (dHauss+1) );
+    scalar p = Foam::pow(u, -0.5 * (dHurst+1) );
     p *= Foam::exp(-smoothing*u);
     return p;
   }
@@ -204,17 +204,6 @@ private:
   void fftDisp(scalarField& disp)
   {
     unsigned int MN = M*N;
-
-//    if ( MN & (MN - 1) )
-//    {
-//        FatalErrorIn
-//        (
-//             "getSurfaceDisplacement  "
-//        )    <<  "number of elements is not a power of 2"  <<  endl
-//             <<  "    Number of elements = "  <<  MN
-//             <<  abort(FatalError);
-//    }
-
     std::vector<std::complex<double> > f, F;
     f.resize(MN);
     F.resize(MN);
@@ -371,10 +360,10 @@ int main(int argc, char *argv[])
          << "There is no `roughness` parameter in dictionary"
          << exit(FatalError);
   }
-  double dHauss;
-  if( !surfRoughGenDict.readIfPresent<double>("dHauss", dHauss) ){
+  double dHurst;
+  if( !surfRoughGenDict.readIfPresent<double>("dHurst", dHurst) ){
     SeriousErrorIn("main")
-         << "There is no `dHauss` parameter in dictionary"
+         << "There is no `dHurst` parameter in dictionary"
          << exit(FatalError);
   }
   double smoothing;
@@ -392,11 +381,11 @@ int main(int argc, char *argv[])
   Info <<  "minSize:       "  <<  N           <<  endl;
   Info <<  "seed:          "  <<  seed        <<  endl;
   Info <<  "roughness:     "  <<  rgh         <<  endl;
-  Info <<  "dHauss:        "  <<  dHauss  <<  endl;
+  Info <<  "dHurst:        "  <<  dHurst      <<  endl;
   Info <<  "smoothing:     "  <<  smoothing   <<  endl;
   Info <<  "Setup RoughnessGenerator class"   <<  endl;
 
-  RoughnessGenerator rg( seed, M, N, rgh, wayToApply, dHauss, smoothing );
+  RoughnessGenerator rg( seed, M, N, rgh, wayToApply, dHurst, smoothing );
   
   double cpuTime = runTime.elapsedCpuTime();
   
