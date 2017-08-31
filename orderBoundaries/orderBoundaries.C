@@ -143,46 +143,48 @@ int main(int argc, char *argv[])
 
     const bool overwrite = args.optionFound("overwrite");
 
-    //#include "createNamedPolyMesh.H"
-    //#include "createDynamicFvMesh.H"
-
     Info<< "Create mesh for time = "
-        << runTime.constant() << nl << endl;
+        << runTime.timeName() << nl << endl;
 
     polyMesh mesh
     (
             IOobject
             (
                 dynamicFvMesh::defaultRegion,
-                runTime.constant(),
+                runTime.timeName(),
                 runTime,
                 IOobject::MUST_READ,
                 IOobject::AUTO_WRITE
             )
     );
 
-    //const bool writeObj = args.optionFound("writeObj");
-    
     const polyBoundaryMesh& patches = mesh.boundaryMesh();
-    
 
     const word oldInstance = mesh.pointsInstance();
-
-
-
+    
+    const word fname("pointMotionU");
+    word dname;
+    if( exists(runTime.path()/"0"/fname) )
+    {
+      dname = "0";
+    }
+    else
+    {
+      dname = "Zero";
+    }
+    
     pointVectorField pMU
     (
         IOobject
         (
-            "pointMotionU",
-            "0",
-            mesh,
-            IOobject::MUST_READ,
-            IOobject::NO_WRITE
+          "pointMotionU",
+          dname,
+          mesh,
+          IOobject::MUST_READ,
+          IOobject::NO_WRITE
         ),
         pointMesh::New(mesh)
     );
-    
     
     Info<<"Patch size: "<<patches.size()<<nl;
 
