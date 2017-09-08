@@ -224,14 +224,14 @@ private:
     {
       for(int n=0; n<N/2+1; ++n)
       {
-        scalar p = TwoPi * rnd.scalar01();
+        scalar p = TwoPi * rnd.sample01<scalar>();
         int u = N * m*m / static_cast<double>(M) + M * n*n / static_cast<double>(N);
 
         scalar rad = 0.0;
         if(u == 0)
           rad = 0.0;
         else
-          rad = pspec(u) * rnd.GaussNormal();
+          rad = pspec(u) * rnd.GaussNormal<scalar>();
 
         f[ index(m,n) ] = 
                 rad * std::complex<double>(Foam::cos(p),  Foam::sin(p));
@@ -248,9 +248,9 @@ private:
     {
       for(int n=1; n<N/2; ++n)
       {
-        scalar p = TwoPi * rnd.scalar01();
+        scalar p = TwoPi * rnd.sample01<scalar>();
         int u = N * m*m / static_cast<double>(M) + M * n*n / static_cast<double>(N);
-        scalar rad = pspec(u) * rnd.GaussNormal();
+        scalar rad = pspec(u) * rnd.GaussNormal<scalar>();
 
         f[ index(  m, N-n) ] = 
                 rad * std::complex<double>(Foam::cos(p),  Foam::sin(p));

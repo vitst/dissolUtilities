@@ -88,7 +88,7 @@ void Foam::calcTypes::volIntegral::calc
     );
 
     // Check field exists
-    if (fieldHeader.headerOk())
+    //if (fieldHeader.headerOk())
     {
         bool processed = false;
 
@@ -107,10 +107,10 @@ void Foam::calcTypes::volIntegral::calc
                 << exit(FatalError);
         }
     }
-    else
-    {
-        Info<< "    No " << fieldName << endl;
-    }
+    //else
+    //{
+    //    Info<< "    No " << fieldName << endl;
+    //}
 }
 
 

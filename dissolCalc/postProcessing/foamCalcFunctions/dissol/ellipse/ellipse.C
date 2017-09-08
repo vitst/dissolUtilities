@@ -521,7 +521,7 @@ void Foam::calcTypes::ellipse::write_q
       IOobject::MUST_READ
   );
   
-  if (header.headerOk())
+  //if (header.headerOk())
   {
     fieldU field(header, mesh);
 
@@ -587,9 +587,9 @@ void Foam::calcTypes::ellipse::write_q
     }  
     Info<<endl;
   }
-  else{
-    FatalError<<"There is no U field"<<nl<<nl<<exit(FatalError);
-  }
+  //else{
+  //  FatalError<<"There is no U field"<<nl<<nl<<exit(FatalError);
+  //}
 }
 
 void Foam::calcTypes::ellipse::write_p
@@ -627,7 +627,7 @@ void Foam::calcTypes::ellipse::write_Ccup
       IOobject::MUST_READ
   );
   
-  if (headerU.headerOk() && headerC.headerOk())
+  //if (headerU.headerOk() && headerC.headerOk())
   {
     fieldU field_u(headerU, mesh);
     fieldC field_c(headerC, mesh);
@@ -699,15 +699,15 @@ void Foam::calcTypes::ellipse::write_Ccup
     }  
     Info<<endl;
   }
-  else if( !headerU.headerOk() && headerC.headerOk() ){
-    FatalError<<"There is no U field"<<nl<<nl<<exit(FatalError);
-  }
-  else if( headerU.headerOk() && !headerC.headerOk() ){
-    FatalError<<"There is no C field"<<nl<<nl<<exit(FatalError);
-  }
-  else{
-    FatalError<<"There is no U and C field"<<nl<<nl<<exit(FatalError);
-  }
+  //else if( !headerU.headerOk() && headerC.headerOk() ){
+  //  FatalError<<"There is no U field"<<nl<<nl<<exit(FatalError);
+  //}
+  //else if( headerU.headerOk() && !headerC.headerOk() ){
+  //  FatalError<<"There is no C field"<<nl<<nl<<exit(FatalError);
+  //}
+  //else{
+  //  FatalError<<"There is no U and C field"<<nl<<nl<<exit(FatalError);
+  //}
 }
 
 // ************************************************************************* //
