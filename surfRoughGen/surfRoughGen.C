@@ -42,6 +42,7 @@ Needs dictionary
 \*---------------------------------------------------------------------------*/
 
 #include <complex>
+#include <vector>
 #include <fftw3.h>
 #include "fvCFD.H"
 #include "dynamicFvMesh.H"
