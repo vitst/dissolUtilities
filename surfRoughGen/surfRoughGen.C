@@ -49,6 +49,13 @@ Needs dictionary
 #include "coupledPatchInterpolation.H"
 #include "pointPatchField.H"
 
+#include "normalMotionSlipPointPatchVectorField.H"
+#include "fixedValuePointPatchField.H"
+
+#include "velocityMotionSolver.H"
+
+#include "motionSolver.H"
+
 /*
  #######################################################################################
  *    Main program body
@@ -68,7 +75,6 @@ protected:
   double smoothing;
   
 public:
-  
   // Constructor
   RoughnessGenerator
   (
@@ -421,14 +427,38 @@ int main(int argc, char *argv[])
   
   pointDispWall /= runTime.deltaTValue();
   
-  //bool auxSw = mesh_rlx.get_fixInletWallEdgeDispl();
-  //mesh_rlx.set_fixInletWallEdgeDispl(false);
-  //mesh_rlx.meshUpdate(pointDispWall, runTime);
-  //mesh_rlx.set_fixInletWallEdgeDispl(auxSw);
   pointVectorField& pointVelocity = const_cast<pointVectorField&>
   (
     mesh.objectRegistry::lookupObject<pointVectorField>( "pointMotionU" )
   );
+  
+
+  /*
+  // change the boundary
+  Foam::normalMotionSlipPointPatchVectorField& pp =
+          refCast<Foam::normalMotionSlipPointPatchVectorField>
+          (
+              pointVelocity.boundaryFieldRef()[patchID]
+          );
+  
+
+  Info<<"patch type: "<< pp.type()<<nl;
+  
+  //velocityMotionSolver& vms = const_cast<velocityMotionSolver&>
+  //(
+  //  mesh.objectRegistry::lookupObject<velocityMotionSolver>( "velocityMotionSolver" )
+  //);
+  //Info<<"OBJ:   "<< vms <<nl;
+  forAll(mesh.cellZones(), zoneI)
+  {
+    const cellZone& cZone = mesh.cellZones()[zoneI]; 
+    Info<<"cell zone: "<<cZone.name()<<nl;
+  }
+  autoPtr<motionSolver> motionPtr = motionSolver::New(mesh.cellZones()[0].zoneMesh().mesh());
+
+  exit(0);
+  */
+  
   pointVelocity.boundaryFieldRef()[patchID] == pointDispWall;
   mesh.update();
   
