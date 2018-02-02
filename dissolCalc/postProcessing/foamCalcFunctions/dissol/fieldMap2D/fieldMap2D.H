@@ -37,6 +37,7 @@ SourceFiles
 
 #include "calcType.H"
 #include <map>
+#include "interpolation.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 

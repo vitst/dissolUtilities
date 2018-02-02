@@ -368,7 +368,7 @@ void Foam::calcTypes::fieldMap2D::calc
     fileName current_dissolCalc_dir;
     current_dissolCalc_dir = "postProcessing/dissolCalc" / runTime.timeName();
     if ( !isDir(current_dissolCalc_dir) ) mkDir(current_dissolCalc_dir);
-
+    
     if(processingType_ == "all"){
       write_all(mesh, runTime);
     }
@@ -1393,15 +1393,17 @@ void Foam::calcTypes::fieldMap2D::write_all
     fileName current_file_path_csurf =
             "postProcessing/dissolCalc" / runTime.timeName() / "csurf";
   
-    autoPtr<interpolation<vector> >interpolatorU
+    autoPtr<interpolation<vector> > interpolatorU
     (
       interpolation<vector>::New("cellPoint",field_u)
     );
+    
     autoPtr<interpolation<scalar> >interpolatorC
     (
       interpolation<scalar>::New("cellPoint",field_c)
     );
 
+    
     ios_base::openmode mode =
             (curNum==0) ? 
               ios_base::out|ios_base::trunc : 
@@ -1427,7 +1429,7 @@ void Foam::calcTypes::fieldMap2D::write_all
     }
     
     meshSearch searchEngine(mesh);
-        
+    
     int count = 0;
     int iSurf = 0;
     while (iSurf<pointsXYonsurface.size() )
@@ -1473,8 +1475,8 @@ void Foam::calcTypes::fieldMap2D::write_all
           }
           label faceI = -1;
 
-          vector interp_fieldU =
-                  interpolatorU->interpolate(samp_point, cellI, faceI);
+          vector interp_fieldU = 
+                  interpolatorU().interpolate(samp_point, cellI, faceI);
           // velocity = 0 on the surface
           if(i==0 || i==K_)
           {
@@ -1486,7 +1488,7 @@ void Foam::calcTypes::fieldMap2D::write_all
           Uy[i] = interp_fieldU.component(latDir);
           
           scalar interp_fieldC = 
-                  interpolatorC->interpolate(samp_point, cellI, faceI);
+                  interpolatorC().interpolate(samp_point, cellI, faceI);
           UCx[i] = Ux[i] * interp_fieldC;
           UCy[i] = Uy[i] * interp_fieldC;
           if(i==K_)

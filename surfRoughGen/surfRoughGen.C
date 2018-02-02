@@ -204,7 +204,7 @@ private:
   scalar pspec(int u)
   {
     scalar p = Foam::pow(u, -0.5 * (dHurst+1) );
-    p *= Foam::exp(-smoothing*u);
+    p *= Foam::exp(-smoothing*u/static_cast<double>(M*N) );
     return p;
   }
 
@@ -417,47 +417,21 @@ int main(int argc, char *argv[])
   rg.getSurfaceDisplacement(mesh, faceDisp, patchID, majDir, minDir);
   scalarField pointDisp = patchInterpolator.faceToPointInterpolate(faceDisp);
   
-  Info <<  "Maximum and minimum face displacement" 
+  //pointDisp /= runTime.deltaTValue();
+  //pointDisp *= 100;
+  
+  Info <<  "Maximum and minimum face displacement  " 
        <<  max(faceDisp)  <<  "  " << min(faceDisp) << endl;
-  Info <<  "Maximum and minimum point displacement"
+  Info <<  "Maximum and minimum point displacement  "
        <<  max(pointDisp)  <<  " " << min(pointDisp) << endl;
   
   forAll( pointDispWall, i )
     pointDispWall[i] = pointDisp[i] * motionN[i];
   
-  pointDispWall /= runTime.deltaTValue();
-  
   pointVectorField& pointVelocity = const_cast<pointVectorField&>
   (
     mesh.objectRegistry::lookupObject<pointVectorField>( "pointMotionU" )
   );
-  
-
-  /*
-  // change the boundary
-  Foam::normalMotionSlipPointPatchVectorField& pp =
-          refCast<Foam::normalMotionSlipPointPatchVectorField>
-          (
-              pointVelocity.boundaryFieldRef()[patchID]
-          );
-  
-
-  Info<<"patch type: "<< pp.type()<<nl;
-  
-  //velocityMotionSolver& vms = const_cast<velocityMotionSolver&>
-  //(
-  //  mesh.objectRegistry::lookupObject<velocityMotionSolver>( "velocityMotionSolver" )
-  //);
-  //Info<<"OBJ:   "<< vms <<nl;
-  forAll(mesh.cellZones(), zoneI)
-  {
-    const cellZone& cZone = mesh.cellZones()[zoneI]; 
-    Info<<"cell zone: "<<cZone.name()<<nl;
-  }
-  autoPtr<motionSolver> motionPtr = motionSolver::New(mesh.cellZones()[0].zoneMesh().mesh());
-
-  exit(0);
-  */
   
   pointVelocity.boundaryFieldRef()[patchID] == pointDispWall;
   mesh.update();
