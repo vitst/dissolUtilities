@@ -1,14 +1,13 @@
 #!/bin/bash
 
-echo "Making utility dissolCalc"
-pushd dissolCalc
-./Allwmake
-popd
-
-echo
+echo "Make utilities"
 for d in */ ; do
   if [ -d ${d}/Make ]; then
-    echo "Making utility $d"
     wmake $d
+  elif [ -f ${d}/Allwmake ]; then
+    pushd $d
+    ./Allwmake
+    popd
   fi
 done
+

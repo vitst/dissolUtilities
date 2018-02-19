@@ -18,9 +18,9 @@ class Parabola(gbm.AbstractBaseGenerator):
     self.parameters = []
 
     # the format for parameters: [name, initial_value, description]
-    self.parameters.append(['x_len', 26., 'perpendicular length'])
-    self.parameters.append(['x_res', 4000, 'number of cells in X direction'])
-    self.parameters.append(['y_res', 100, 'number of cells in Y direction'])
+    self.parameters.append(['x_len', 24., 'perpendicular length'])
+    self.parameters.append(['x_res', 200, 'number of cells in X direction'])
+    self.parameters.append(['y_res', 10, 'number of cells in Y direction'])
     self.parameters.append(['z_res', 1, 'number of cells in Z direction'])
     self.parameters.append(['x_G',   2.0, 'grading in X direction'])
     self.parameters.append(['y_G',   1.0, 'grading in Y direction'])
@@ -50,9 +50,8 @@ class Parabola(gbm.AbstractBaseGenerator):
     xmin = 11                           # Set apex of parabola
     rho  = 3                            # Curvature
     xmax = xmin + x_len
-    x = np.arange(0.5, x_res)*x_len/x_res
+    x = np.linspace(1/x_res,x_len,x_res)
     y = []
-
     R  = 1
     X  = x_len - R
     xt = X - poly.polyroots(np.array([R*R, 0, -(2*rho*X+1), 2*rho]))[1]
@@ -70,14 +69,14 @@ class Parabola(gbm.AbstractBaseGenerator):
 
 
     #Lowest plane
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(xmin,        0,-0.5)   # 0
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(xmax, -y_len/2,-0.5)   # 1
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(xmax,  y_len/2,-0.5)   # 2
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(xmin,        0, 0)   # 0
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(xmax, -y_len/2, 0)   # 1
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(xmax,  y_len/2, 0)   # 2
 
     #Highest plane
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(xmin,        0, 0.5)   # 3
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(xmax, -y_len/2, 0.5)   # 4
-    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(xmax,  y_len/2, 0.5)   # 5
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(xmin,        0, 1)   # 3
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(xmax, -y_len/2, 1)   # 4
+    fileCont += '    ({0:8g} {1:8g} {2:8g})\n'.format(xmax,  y_len/2, 1)   # 5
 
     fileCont += ');\n'
 
@@ -92,22 +91,22 @@ class Parabola(gbm.AbstractBaseGenerator):
     #******Parabola******
     fileCont += '    spline 0 1 (\n'
     for i in range(len(x)):
-      fileCont += '        ({0:8g} {1:8g} {2:8g})\n'.format( x[i], -y[i],-0.5)
+      fileCont += '        ({0:8g} {1:8g} {2:8g})\n'.format( x[i], -y[i],0)
     fileCont += '    )\n'
 
     fileCont += '    spline 0 2 (\n'
     for i in range(len(x)):
-      fileCont += '        ({0:8g} {1:8g} {2:8g})\n'.format( x[i],  y[i],-0.5)
+      fileCont += '        ({0:8g} {1:8g} {2:8g})\n'.format( x[i],  y[i],0)
     fileCont += '    )\n'
 
     fileCont += '    spline 3 4 (\n'
     for i in range(len(x)):
-      fileCont += '        ({0:8g} {1:8g} {2:8g})\n'.format( x[i], -y[i], 0.5)
+      fileCont += '        ({0:8g} {1:8g} {2:8g})\n'.format( x[i], -y[i],1)
     fileCont += '    )\n'
 
     fileCont += '    spline 3 5 (\n'
     for i in range(len(x)):
-      fileCont += '        ({0:8g} {1:8g} {2:8g})\n'.format( x[i],  y[i], 0.5)
+      fileCont += '        ({0:8g} {1:8g} {2:8g})\n'.format( x[i],  y[i],1)
     fileCont += '    )\n'
     #********************
 
