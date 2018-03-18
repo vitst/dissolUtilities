@@ -15,7 +15,7 @@ EXE_LIBS = \
     -ldynamicMesh \
     -ldynamicFvMesh \
     -L$(FOAM_USER_LIBBIN) \
+    -ldissolMotionPointPatchVectorField \
     -L/globalfs/lib/checs/fftw-gnu/lib \
-    -lfftw3 \
-    -ldissolMotionPointPatchVectorField
+    -lfftw3
 

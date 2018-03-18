@@ -29,9 +29,7 @@ Description
   two parallel plates. It overwrites 0 directory with modified surface.
   
   Limitations now are the next:
-    - a geometry should include two parallel plates
-    - the number of faces on each surface should be 
-      a power of 2 (for Fourier transform)
+    - a geometry should include one or two flat plates
 
 Usage
   - surfRoughGen
@@ -69,10 +67,13 @@ protected:
   int seed;
   int M;
   int N;
+  double majLen;
+  double minLen;
   double rgh;
-  word wayToApply;
   double dHurst;        // Fractal dimension D = 3 - dHurst
-  double smoothing;
+  double cutLen;
+  double maxDisp;
+  word wayToApply;
   
 public:
   // Constructor
@@ -81,19 +82,25 @@ public:
     int seed_,
     int M_,
     int N_,
+    double majLen_,
+    double minLen_,
     double rgh_,
-    word wayToApply_,
     double dHurst,
-    double smoothing_
+    double cutLen_,
+    double maxDisp_,
+    word wayToApply_
   )
   :
     seed(seed_),
     M(M_),
     N(N_),
+    majLen(majLen_),
+    minLen(minLen_),
     rgh(rgh_),
-    wayToApply(wayToApply_),
     dHurst(dHurst),
-    smoothing(smoothing_)
+    cutLen(cutLen_),
+    maxDisp(maxDisp_),
+    wayToApply(wayToApply_)
   {
   }
 
@@ -176,7 +183,6 @@ public:
 
         if(wayToApply=="oneSurfaceDecay")
         {
-          //wd[i] = sFn[ind];
           double factor = ( 1 - curMaj / Llat );
           if( factor<0.0 ) factor = 0.0;
           wd[i] = sFn[ind] * factor;
@@ -201,11 +207,13 @@ private:
   // converts indexes
   label index(label m, label n){ return n + N * m; }
   
-  scalar pspec(int u)
+  scalar power(double ksq)
   {
-    scalar p = Foam::pow(u, -0.5 * (dHurst+1) );
-    p *= Foam::exp(-smoothing*u/static_cast<double>(M*N) );
-    return p;
+    if (ksq == 0)  return 0;        // <rad^2> ~ 1/ksq^(1+H)
+    if (ksq >  1)  return 0;        // cutoff wavelength = cutLen
+    scalar p = Foam::pow(ksq, -(dHurst+1) );
+//    p *= Foam::exp(-ksq);
+    return std::sqrt(p);
   }
 
   void fftDisp(scalarField& disp)
@@ -232,13 +240,12 @@ private:
       for(int n=0; n<N/2+1; ++n)
       {
         scalar p = TwoPi * rnd.sample01<scalar>();
-        int u = N * m*m / static_cast<double>(M) + M * n*n / static_cast<double>(N);
-
-        scalar rad = 0.0;
-        if(u == 0)
-          rad = 0.0;
-        else
-          rad = pspec(u) * rnd.GaussNormal<scalar>();
+        scalar rad;
+        double majk, mink, ksq;
+        majk = m*cutLen/majLen;
+        mink = n*cutLen/minLen;
+        ksq   = majk*majk + mink*mink;
+        rad = power(ksq) * rnd.GaussNormal<scalar>();
 
         f[ index(m,n) ] = 
                 rad * std::complex<double>(Foam::cos(p),  Foam::sin(p));
@@ -246,7 +253,6 @@ private:
                 rad * std::complex<double>(Foam::cos(p), -Foam::sin(p));
       }
     }
-
     f[ index(M/2,0)   ].imag(0.0);
     f[ index(0,  N/2) ].imag(0.0);
     f[ index(M/2,N/2) ].imag(0.0);
@@ -256,8 +262,12 @@ private:
       for(int n=1; n<N/2; ++n)
       {
         scalar p = TwoPi * rnd.sample01<scalar>();
-        int u = N * m*m / static_cast<double>(M) + M * n*n / static_cast<double>(N);
-        scalar rad = pspec(u) * rnd.GaussNormal<scalar>();
+        scalar rad;
+        double majk, mink, ksq;
+        majk = TwoPi*m/majLen;
+        mink = TwoPi*n/minLen;
+        ksq  = majk*majk + mink*mink;
+        rad  = power(ksq) * rnd.GaussNormal<scalar>();
 
         f[ index(  m, N-n) ] = 
                 rad * std::complex<double>(Foam::cos(p),  Foam::sin(p));
@@ -341,16 +351,28 @@ int main(int argc, char *argv[])
          << "There is no `minDir` parameter in dictionary"
          << exit(FatalError);
   }
-  int M;
-  if( !surfRoughGenDict.readIfPresent<int>("majSize", M) ){
+  int majLen;
+  if( !surfRoughGenDict.readIfPresent<int>("majLen", majLen) ){
     SeriousErrorIn("main")
-         << "There is no `majSize` parameter in dictionary"
+         << "There is no `majLen` parameter in dictionary"
+         << exit(FatalError);
+  }
+  int minLen;
+  if( !surfRoughGenDict.readIfPresent<int>("minLen", minLen) ){
+    SeriousErrorIn("main")
+         << "There is no `minLen` parameter in dictionary"
+         << exit(FatalError);
+  }
+  int M;
+  if( !surfRoughGenDict.readIfPresent<int>("majNum", M) ){
+    SeriousErrorIn("main")
+         << "There is no `majNum` parameter in dictionary"
          << exit(FatalError);
   }
   int N;
-  if( !surfRoughGenDict.readIfPresent<int>("minSize", N) ){
+  if( !surfRoughGenDict.readIfPresent<int>("minNum", N) ){
     SeriousErrorIn("main")
-         << "There is no `minSize` parameter in dictionary"
+         << "There is no `minNum` parameter in dictionary"
          << exit(FatalError);
   }
   
@@ -373,10 +395,16 @@ int main(int argc, char *argv[])
          << "There is no `dHurst` parameter in dictionary"
          << exit(FatalError);
   }
-  double smoothing;
-  if( !surfRoughGenDict.readIfPresent<double>("smoothing", smoothing) ){
+  double cutLen;
+  if( !surfRoughGenDict.readIfPresent<double>("cutLen", cutLen) ){
     SeriousErrorIn("main")
-         << "There is no `smoothing` parameter in dictionary"
+         << "There is no `cutLen` parameter in dictionary"
+         << exit(FatalError);
+  }
+  double maxDisp;
+  if( !surfRoughGenDict.readIfPresent<double>("maxDisp", maxDisp) ){
+    SeriousErrorIn("main")
+         << "There is no `maxDisp` parameter in dictionary"
          << exit(FatalError);
   }
   
@@ -384,15 +412,19 @@ int main(int argc, char *argv[])
   Info <<  "apply (method):"  <<  wayToApply  <<  endl;
   Info <<  "majDir:        "  <<  majDir      <<  endl;
   Info <<  "minDir:        "  <<  minDir      <<  endl;
-  Info <<  "majSize:       "  <<  M           <<  endl;
-  Info <<  "minSize:       "  <<  N           <<  endl;
+  Info <<  "majLen:        "  <<  majLen      <<  endl;
+  Info <<  "minLen:        "  <<  minLen      <<  endl;
+  Info <<  "majNum:        "  <<  M           <<  endl;
+  Info <<  "minNum:        "  <<  N           <<  endl;
   Info <<  "seed:          "  <<  seed        <<  endl;
   Info <<  "roughness:     "  <<  rgh         <<  endl;
   Info <<  "dHurst:        "  <<  dHurst      <<  endl;
-  Info <<  "smoothing:     "  <<  smoothing   <<  endl;
+  Info <<  "cutLen:        "  <<  cutLen      <<  endl;
+  Info <<  "maxDisp:       "  <<  maxDisp     <<  endl;
   Info <<  "Setup RoughnessGenerator class"   <<  endl;
 
-  RoughnessGenerator rg( seed, M, N, rgh, wayToApply, dHurst, smoothing );
+  RoughnessGenerator rg( seed, M, N, majLen, minLen, 
+                         rgh, dHurst, cutLen, maxDisp, wayToApply );
   
   double cpuTime = runTime.elapsedCpuTime();
   
@@ -417,13 +449,16 @@ int main(int argc, char *argv[])
   rg.getSurfaceDisplacement(mesh, faceDisp, patchID, majDir, minDir);
   scalarField pointDisp = patchInterpolator.faceToPointInterpolate(faceDisp);
   
-  //pointDisp /= runTime.deltaTValue();
-  //pointDisp *= 100;
+  forAll( pointDisp, i )
+  {
+    pointDisp[i] = std::min(pointDisp[i],  maxDisp);
+    pointDisp[i] = std::max(pointDisp[i], -maxDisp);
+  }
   
-  Info <<  "Maximum and minimum face displacement  " 
+  Info <<  "Maximum and minimum face displacements  " 
        <<  max(faceDisp)  <<  "  " << min(faceDisp) << endl;
-  Info <<  "Maximum and minimum point displacement  "
-       <<  max(pointDisp)  <<  " " << min(pointDisp) << endl;
+  Info <<  "Maximum and minimum point displacements  "
+       <<  max(pointDisp) <<  "  " << min(pointDisp) << endl;
   
   forAll( pointDispWall, i )
     pointDispWall[i] = pointDisp[i] * motionN[i];

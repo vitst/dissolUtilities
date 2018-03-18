@@ -18,13 +18,16 @@ FoamFile
 apply               oneSurface;
 patchName           solubleWall;
 
-majSize             256;
-minSize             128;
 majDir              0;
 minDir              1;
+majLen              380;
+minLen              330;
+majNum              190;
+minNum              165;
 
 seed                513287;
-roughness           0.1;
-fractalParam       -1;
-smoothing           0.01;
+roughness           0.05;
+dHurst              0;
+cutLen              2;
+maxDisp             0.1;
 
