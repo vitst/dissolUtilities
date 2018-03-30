@@ -1,0 +1,35 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  4.0                                   |
+|   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     4.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      fieldMap2Ddict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+patchName               solubleWall;
+
+// geometry options: flat, concentricCylinders
+geometry                flat; 
+
+// box
+minPoint         (  0   0   1);       // Start at top plane (y=1)
+maxPoint         (380 330  -5);       // Integrate towards solubleWall 
+
+flowDirection                     0;  // 0 - X, 1 - Y, 2 - Z
+integrationDirection              2;  // 0 - X, 1 - Y, 2 - Z
+
+// intersections  options: 1 or 2
+expectedNumberOfIntersections     1;  // one soluble wall
+
+numberOfIntegrationPoints         8;
+
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
