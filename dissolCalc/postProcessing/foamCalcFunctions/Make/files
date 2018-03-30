@@ -4,7 +4,7 @@ calcType/calcTypeNew.C
 field/volIntegral/volIntegral.C
 
 dissol/ellipse/ellipse.C
-dissol/fieldMap2D/fieldMap2D.C
+dissol/fieldMap2d/fieldMap2d.C
 
 
 LIB = $(FOAM_USER_LIBBIN)/libdissolCalcFunctions
