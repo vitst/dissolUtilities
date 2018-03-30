@@ -18,7 +18,7 @@ FoamFile
 patchName               solubleSurf;
 
 // geometry options: flat, concentricCylinders
-geometry								flat; 
+geometry                flat; 
 
 // box
 // if one wall is fixed minPoint should represent it like in this example
