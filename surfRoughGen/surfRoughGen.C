@@ -126,7 +126,7 @@ public:
     {
       sFp = sFn;
     }
-
+    
     pointField pointFace = mesh.boundaryMesh()[patchID].faceCentres();
     pointField normlFace = mesh.boundaryMesh()[patchID].faceNormals();
     scalar maxMaj = max( pointFace.component(majDir) );
