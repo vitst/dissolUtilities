@@ -10,6 +10,7 @@ EXE_LIBS = \
     -L$(FOAM_USER_LIBBIN) \
     -lnormalMotionSlipBasePointPatchVectorField \
     -lnormalMotionSlipPointPatchVectorField \
+    -lcodedNormalMotionSlipPointPatchVectorField \
     -ldynamicMesh \
     -lreconstruct \
     -lmeshTools \

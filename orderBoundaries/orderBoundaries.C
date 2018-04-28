@@ -56,6 +56,7 @@ Description
 
 #include "dynamicFvMesh.H"
 #include "normalMotionSlipPointPatchVectorField.H"
+#include "codedNormalMotionSlipPointPatchVectorField.H"
 #include "pointFields.H"
 
 using namespace Foam;
@@ -204,6 +205,8 @@ int main(int argc, char *argv[])
         if
         (
           isA<normalMotionSlipPointPatchVectorField>
+                ( pMU.boundaryField()[patchi] ) ||
+          isA<codedNormalMotionSlipPointPatchVectorField>
                 ( pMU.boundaryField()[patchi] )
         )
         {
@@ -233,6 +236,8 @@ int main(int argc, char *argv[])
         if
         (
           !isA<normalMotionSlipPointPatchVectorField>
+                ( pMU.boundaryField()[patchi] ) &&
+          !isA<codedNormalMotionSlipPointPatchVectorField>
                 ( pMU.boundaryField()[patchi] )
         )
         {
