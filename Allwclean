@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "Clean utilities"
+echo "Clean everything"
 for d in */ ; do
   if [ -d ${d}/Make ]; then
     wclean $d
