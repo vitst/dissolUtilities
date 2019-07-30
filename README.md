@@ -1,16 +1,14 @@
 # Pre- and post-processing utilities for dissolFoam
 
-1) genBlockMeshDict: Python utility to generate blockMeshDict files.
-<br>usage:
-<br>    python /PATH/TO/YOUR/genBlockMeshDict/runGen.py -l              # List possible generators
-<br>    python /PATH/TO/YOUR/genBlockMeshDict/runGen.py -g generator    # Create dictionary
-<br>    python /PATH/TO/YOUR/genBlockMeshDict/runGen.py -d genDict      # Create blockMeshDict
-<br>The case dissolCirc uses genBLockMeshDict in the script makeSTL
-
-2) surfRoughGen: OpenFOAM utility to generate a rough surface by Fourier synthesis.
+1) surfRoughGen: OpenFOAM utility to generate a rough surface by Fourier synthesis.
 <br>usage:
 <br>    surfRoughGen
 <br>It has a dictionary system/surfRoughGenDict - the case dissolFrac uses surfRoughGen<\br>
+
+2) runMeshUpdateOnce: OpenFOAM utility for a single mesh update cycle (after surfRoughGen)
+<br>usage:
+<br>    runMeshUpdateOnce
+
 
 3) dissolCalc: OpenFOAM utility to postprocess fracture fields by integrating over the aperture
 <br>usage:

@@ -14,5 +14,9 @@ EXE_LIBS = \
     -lsampling \
     -ldynamicMesh \
     -ldynamicFvMesh \
+<<<<<<< HEAD
     -lfftw3
+=======
+    -L$(WM_THIRD_PARTY_DIR)/platforms/linux64Gcc/fftw-3.3.7/lib64 -lfftw3
+>>>>>>> 96bbf993120f9d791171e4bf7b1f3b16b3b26db6
 
