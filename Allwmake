@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "Make utilities"
+echo "Make everything"
 for d in */ ; do
   if [ -d ${d}/Make ]; then
     wmake $d

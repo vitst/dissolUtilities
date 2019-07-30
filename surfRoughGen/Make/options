@@ -1,10 +1,10 @@
 EXE_INC = \
-	-I$(LIB_SRC)/randomProcesses/lnInclude \
+    -I$(LIB_SRC)/randomProcesses/lnInclude \
     -I$(LIB_SRC)/finiteVolume/lnInclude \
     -I$(LIB_SRC)/meshTools/lnInclude \
     -I$(LIB_SRC)/dynamicMesh/lnInclude \
     -I$(LIB_SRC)/dynamicFvMesh/lnInclude \
-    -I/globalfs/lib/checs/fftw-gnu/include \
+    -I$(WM_THIRD_PARTY_DIR)/platforms/linux64Gcc/fftw-3.3.7/include \
     -I../../lnInclude
 
 EXE_LIBS = \
@@ -14,8 +14,5 @@ EXE_LIBS = \
     -lsampling \
     -ldynamicMesh \
     -ldynamicFvMesh \
-    -L$(FOAM_USER_LIBBIN) \
-    -ldissolMotionPointPatchVectorField \
-    -L/globalfs/lib/checs/fftw-gnu/lib \
     -lfftw3
 
