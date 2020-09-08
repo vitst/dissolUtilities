@@ -4,7 +4,7 @@ EXE_INC = \
     -I$(LIB_SRC)/meshTools/lnInclude \
     -I$(LIB_SRC)/dynamicMesh/lnInclude \
     -I$(LIB_SRC)/dynamicFvMesh/lnInclude \
-    -I$(WM_THIRD_PARTY_DIR)/platforms/linux64Gcc/fftw-3.3.7/include \
+    -I$(FFTW_ARCH_PATH)/include \
     -I../../lnInclude
 
 EXE_LIBS = \
@@ -14,4 +14,4 @@ EXE_LIBS = \
     -lsampling \
     -ldynamicMesh \
     -ldynamicFvMesh \
-    -lfftw3
+    -L$(FFTW_ARCH_PATH)/lib64 -lfftw3
