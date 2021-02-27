@@ -55,7 +55,7 @@ int main(int argc, char *argv[])
   #include "createDynamicFvMesh.H"
 
   // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
-  
+
   double cpuTime = runTime.elapsedCpuTime();
   
   mesh.update();
@@ -64,9 +64,17 @@ int main(int argc, char *argv[])
   
   Info << nl << "Time statistics:" << nl;
   
-  Info << "Running time:                             " << cpuTime << nl << endl;
+  Info << "Running time:    " << cpuTime << nl << endl;
 
-  Info << "Overwriting points in current time directory." << nl;
+  const bool overwrite = args.found("overwrite");
+
+  if(overwrite)
+      Info << "Overwriting points in current time directory." << nl;
+  else
+  {
+      Info << "Writing to the next time directory." << nl;
+      ++runTime;
+  }
   runTime.writeNow();
   
   Info << "End" << nl;
