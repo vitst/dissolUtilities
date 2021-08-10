@@ -22,7 +22,7 @@ License
     along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
 
 Application
-  surfRoughGen
+  surfRoughGenCircle
 
 Description
   Preprocessing utility to modify the fracture surface represented by
@@ -32,10 +32,10 @@ Description
     - a geometry should include one or two flat plates
 
 Usage
-  - surfRoughGen
+  - surfRoughGenCircle
 
 Needs dictionary
-  system/surfRoughGenDict
+  system/surfRoughGenDict.circle
 
 \*---------------------------------------------------------------------------*/
 
@@ -43,9 +43,10 @@ Needs dictionary
 #include "dynamicFvMesh.H"
 #include "fvCFD.H"
 #include "pointPatchField.H"
+#include <cmath>
 #include <complex>
 #include <fftw3.h>
-#include <vector>
+//#include <vector>
 
 #include "fixedValuePointPatchField.H"
 #include "normalMotionSlipPointPatchVectorField.H"
@@ -64,111 +65,63 @@ class RoughnessGenerator {
 protected:
   // Protected data
   int seed;
-  int M;
-  int N;
-  double majLen;
-  double minLen;
+  int totalNum;
+  vector center;
+  vector direction;
+  scalar radius;
   double rgh;
+  double cutoff;
   double dHurst; // Fractal dimension D = 3 - dHurst
-  double cutLen;
-  double maxDisp;
   word wayToApply;
 
 public:
   // Constructor
-  RoughnessGenerator(int seed_, int M_, int N_, double majLen_, double minLen_,
-                     double rgh_, double dHurst, double cutLen_,
-                     double maxDisp_, word wayToApply_)
-      : seed(seed_), M(M_), N(N_), majLen(majLen_), minLen(minLen_), rgh(rgh_),
-        dHurst(dHurst), cutLen(cutLen_), maxDisp(maxDisp_),
-        wayToApply(wayToApply_) {}
 
-  void getSurfaceDisplacement(dynamicFvMesh &mesh, scalarField &wd,
-                              label &patchID, int majDir, int minDir) {
-    scalarField sFn(M * N, 0.0);
-    fftDisp(sFn);
-    scalarField sFp(M * N, 0.0);
-    if (wayToApply == "asymmetric") {
-      // shift the seed to get two different numbers
-      seed += 125522;
-      fftDisp(sFp);
-    } else {
-      sFp = sFn;
-    }
+  RoughnessGenerator(int seed_, int totalNum_, point center_, vector direction_,
+          scalar radius_, scalar rgh_, scalar cutoff_, scalar dHurst_, word wayToApply_)
+      : seed(seed_), totalNum(totalNum_), center(center_), direction(direction_),
+          radius(radius_), rgh(rgh_), cutoff(cutoff_), dHurst(dHurst_), 
+          wayToApply(wayToApply_) {}
+
+  void getSurfaceDisplacement(dynamicFvMesh &mesh, scalarField &wd, label &patchID) {
+    scalarField sFp(totalNum, 0.0);
+    fftDisp(sFp);
 
     pointField pointFace = mesh.boundaryMesh()[patchID].faceCentres();
     pointField normlFace = mesh.boundaryMesh()[patchID].faceNormals();
-    scalar maxMaj = max(pointFace.component(majDir));
-    scalar maxLat = max(pointFace.component(minDir));
-    scalar minMaj = min(pointFace.component(majDir));
-    scalar minLat = min(pointFace.component(minDir));
-    double Llat = maxLat - minLat;
-    double Lmaj = maxMaj - minMaj;
 
-    int mveDir = 3 - (minDir + majDir);
+    // scalar cL = constant::mathematical::pi * ;
+    scalarField phi(totalNum, 0.0);
+    forAll(pointFace, i) {
+      vector radVec = pointFace[i] - center;
 
-    if (wayToApply == "internalCylinder") {
-      // TODO this is just a quick solution, make it general
-      scalar cL = constant::mathematical::pi * 198.0;
-      forAll(pointFace, i) {
-        double x, y;
-        x = pointFace[i].x();
-        y = pointFace[i].y();
+      scalar phi = Foam::atan2(radVec[1], radVec[0]);
+      scalar phiDeg = phi * 180.0 / constant::mathematical::pi;
+      if (phiDeg < 0)
+        phiDeg += 360.0;
 
-        scalar phi = Foam::atan2(y, x);
-        phi /= constant::mathematical::twoPi;
-        if (phi < 0)
-          phi += 1.0;
+      int ind0 = std::trunc(phiDeg/360.0 * totalNum);
+      int ind1 = std::ceil(phiDeg/360.0 * totalNum);
+      if(ind1>totalNum) ind1 = totalNum;
 
-        scalar curMaj = pointFace[i].z();
+      scalar x0 = radius * Foam::cos(ind0*360.0/totalNum);
+      scalar y0 = radius * Foam::sin(ind0*360.0/totalNum);
+      scalar x1 = radius * Foam::cos(ind1*360.0/totalNum);
+      scalar y1 = radius * Foam::sin(ind1*360.0/totalNum);
 
-        if (curMaj < cL) {
-          int curm = std::floor(curMaj / cL * (M - 1));
-          int curn = std::floor(phi * (N - 1));
-          int ind = curn + N * curm;
-          wd[i] = sFn[ind] * (1 - curMaj / cL);
-        }
-      }
-    } else {
-      forAll(pointFace, i) {
-        scalar curMaj = pointFace[i].component(majDir) - minMaj;
-        scalar curLat = pointFace[i].component(minDir) - minLat;
+      point p0(x0, y0, 0.05), p1(x1, y1, 0.05);
 
-        scalar sign = normlFace[i].component(mveDir) /
-                      mag(normlFace[i].component(mveDir));
+      scalar w0 = 1.0 / mag( pointFace[i] - p0);
+      scalar w1 = 1.0 / mag( pointFace[i] - p1);
 
-        int curm = std::floor(curMaj / Lmaj * (M - 1));
-        int curn = std::floor(curLat / Llat * (N - 1));
-        int ind = curn + N * curm;
 
-        if (wayToApply == "symmetric" || wayToApply == "oneSurface")
-          wd[i] = sFn[ind];
-
-        if (wayToApply == "oneSurfaceDecay") {
-          double factor = (1 - curMaj / Llat);
-          if (factor < 0.0)
-            factor = 0.0;
-          wd[i] = sFn[ind] * factor;
-        }
-
-        if (wayToApply == "synchronous")
-          wd[i] = sign * sFn[ind];
-
-        if (wayToApply == "asymmetric") {
-          if (sign < 0)
-            wd[i] = sFn[ind];
-          else
-            wd[i] = sFp[ind];
-        }
-      }
+      wd[i] = (sFp[ind0] * w0 + sFp[ind1] * w1) / (w0 + w1);
     }
+
     Info << "Displacement calculated" << nl;
   }
 
 private:
-  // converts indexes
-  label index(label m, label n) { return n + N * m; }
-
   scalar power(double ksq) {
     if (ksq == 0)
       return 0; // <rad^2> ~ 1/ksq^(1+H)
@@ -180,67 +133,41 @@ private:
   }
 
   void fftDisp(scalarField &disp) {
-    unsigned int MN = M * N;
+
+    scalar TwoPi = constant::mathematical::twoPi;
+    scalar L = TwoPi * radius; 
+    scalar cutoffL = L / cutoff;
+
     std::vector<std::complex<double>> f, F;
-    f.resize(MN);
-    F.resize(MN);
+    f.resize(totalNum);
+    F.resize(totalNum);
 
     Random rnd(seed);
-    scalar TwoPi = constant::mathematical::twoPi;
 
     Info << "Displacement calc starts...." << nl;
-    /*
-     *   --- ---
-     *  | 1 | 2 |
-     *   --- ---
-     *  | 3 | 4 |
-     *   --- ---
-     */
-    // calculating 1 and 4
-    for (int m = 0; m < M / 2 + 1; ++m) {
-      for (int n = 0; n < N / 2 + 1; ++n) {
-        scalar p = TwoPi * rnd.sample01<scalar>();
-        scalar rad;
-        double majk, mink, ksq;
-        majk = m * cutLen / majLen;
-        mink = n * cutLen / minLen;
-        ksq = majk * majk + mink * mink;
-        rad = power(ksq) * rnd.GaussNormal<scalar>();
 
-        f[index(m, n)] = rad * std::complex<double>(Foam::cos(p), Foam::sin(p));
-        f[index(((M - m) % M), (N - n) % N)] =
-            rad * std::complex<double>(Foam::cos(p), -Foam::sin(p));
-      }
+    for (int n = 0; n < totalNum / 2 + 1; ++n) {
+      scalar p = TwoPi * rnd.sample01<scalar>();
+      double k = n * cutoffL / L;
+      double ksq = k * k;
+      scalar rad = power(ksq) * rnd.GaussNormal<scalar>();
+
+      f[n] = rad * std::complex<double>(Foam::cos(p), Foam::sin(p));
+      f[((totalNum - n) % totalNum)] =
+          rad * std::complex<double>(Foam::cos(p), -Foam::sin(p));
     }
-    f[index(M / 2, 0)].imag(0.0);
-    f[index(0, N / 2)].imag(0.0);
-    f[index(M / 2, N / 2)].imag(0.0);
 
-    for (int m = 1; m < M / 2; ++m) {
-      for (int n = 1; n < N / 2; ++n) {
-        scalar p = TwoPi * rnd.sample01<scalar>();
-        scalar rad;
-        double majk, mink, ksq;
-        majk = TwoPi * m / majLen;
-        mink = TwoPi * n / minLen;
-        ksq = majk * majk + mink * mink;
-        rad = power(ksq) * rnd.GaussNormal<scalar>();
-
-        f[index(m, N - n)] =
-            rad * std::complex<double>(Foam::cos(p), Foam::sin(p));
-        f[index(M - m, n)] =
-            rad * std::complex<double>(Foam::cos(p), -Foam::sin(p));
-      }
-    }
+    f[totalNum / 2].imag(0.0);
 
     fftw_plan plan;
-    plan = fftw_plan_dft_2d(M, N, reinterpret_cast<fftw_complex *>(&f[0]),
-                            reinterpret_cast<fftw_complex *>(&F[0]),
-                            FFTW_BACKWARD, FFTW_ESTIMATE);
+    plan = fftw_plan_dft_1d( totalNum, 
+                             reinterpret_cast<fftw_complex *>(&f[0]),
+                             reinterpret_cast<fftw_complex *>(&F[0]),
+                             FFTW_BACKWARD, FFTW_ESTIMATE);
     fftw_execute(plan);
     fftw_destroy_plan(plan);
 
-    scalarField sF(MN);
+    scalarField sF(totalNum);
     forAll(sF, ii) { sF[ii] = F[ii].real(); }
 
     scalarField sF2 = sqr(sF);
@@ -261,15 +188,15 @@ int main(int argc, char *argv[]) {
 #include "createDynamicFvMesh.H"
 
   // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-  // // reading dictionary surfRoughGenDict
-  IOdictionary surfRoughGenDict(IOobject("surfRoughGenDict", runTime.system(),
+  // // reading dictionary surfRoughGenDict.circle
+  IOdictionary surfRoughGenDict(IOobject("surfRoughGenDict.circle", runTime.system(),
                                          mesh, IOobject::MUST_READ,
                                          IOobject::NO_WRITE));
 
   word wayToApply;
   if (!surfRoughGenDict.readIfPresent<word>("apply", wayToApply)) {
     SeriousErrorIn("main")
-        << "There is no `synchronous` parameter in dictionary"
+        << "There is no `apply` parameter in dictionary"
         << exit(FatalError);
   }
   word patchName;
@@ -278,34 +205,24 @@ int main(int argc, char *argv[]) {
                            << exit(FatalError);
   }
 
-  int majDir;
-  if (!surfRoughGenDict.readIfPresent<int>("majDir", majDir)) {
-    SeriousErrorIn("main") << "There is no `majDir` parameter in dictionary"
+  vector center;
+  if (!surfRoughGenDict.readIfPresent<vector>("center", center)) {
+    SeriousErrorIn("main") << "There is no `center` parameter in dictionary"
                            << exit(FatalError);
   }
-  int minDir;
-  if (!surfRoughGenDict.readIfPresent<int>("minDir", minDir)) {
-    SeriousErrorIn("main") << "There is no `minDir` parameter in dictionary"
+  vector direction;
+  if (!surfRoughGenDict.readIfPresent<vector>("direction", direction)) {
+    SeriousErrorIn("main") << "There is no `direction` parameter in dictionary"
                            << exit(FatalError);
   }
-  int majLen;
-  if (!surfRoughGenDict.readIfPresent<int>("majLen", majLen)) {
-    SeriousErrorIn("main") << "There is no `majLen` parameter in dictionary"
+  scalar radius;
+  if (!surfRoughGenDict.readIfPresent<scalar>("radius", radius)) {
+    SeriousErrorIn("main") << "There is no `radius` parameter in dictionary"
                            << exit(FatalError);
   }
-  int minLen;
-  if (!surfRoughGenDict.readIfPresent<int>("minLen", minLen)) {
-    SeriousErrorIn("main") << "There is no `minLen` parameter in dictionary"
-                           << exit(FatalError);
-  }
-  int M;
-  if (!surfRoughGenDict.readIfPresent<int>("majNum", M)) {
-    SeriousErrorIn("main") << "There is no `majNum` parameter in dictionary"
-                           << exit(FatalError);
-  }
-  int N;
-  if (!surfRoughGenDict.readIfPresent<int>("minNum", N)) {
-    SeriousErrorIn("main") << "There is no `minNum` parameter in dictionary"
+  int totalNum;
+  if (!surfRoughGenDict.readIfPresent<int>("totalNum", totalNum)) {
+    SeriousErrorIn("main") << "There is no `totalNum` parameter in dictionary"
                            << exit(FatalError);
   }
 
@@ -324,34 +241,26 @@ int main(int argc, char *argv[]) {
     SeriousErrorIn("main") << "There is no `dHurst` parameter in dictionary"
                            << exit(FatalError);
   }
-  double cutLen;
-  if (!surfRoughGenDict.readIfPresent<double>("cutLen", cutLen)) {
-    SeriousErrorIn("main") << "There is no `cutLen` parameter in dictionary"
-                           << exit(FatalError);
-  }
-  double maxDisp;
-  if (!surfRoughGenDict.readIfPresent<double>("maxDisp", maxDisp)) {
-    SeriousErrorIn("main") << "There is no `maxDisp` parameter in dictionary"
+  double cutoff;
+  if (!surfRoughGenDict.readIfPresent<double>("cutoff", cutoff)) {
+    SeriousErrorIn("main") << "There is no `cutoff` parameter in dictionary"
                            << exit(FatalError);
   }
 
   Info << "patch:         " << patchName << endl;
   Info << "apply (method):" << wayToApply << endl;
-  Info << "majDir:        " << majDir << endl;
-  Info << "minDir:        " << minDir << endl;
-  Info << "majLen:        " << majLen << endl;
-  Info << "minLen:        " << minLen << endl;
-  Info << "majNum:        " << M << endl;
-  Info << "minNum:        " << N << endl;
+  Info << "center:        " << center << endl;
+  Info << "direction:     " << direction << endl;
+  Info << "radius:        " << radius << endl;
+  Info << "totalNum:      " << totalNum << endl;
   Info << "seed:          " << seed << endl;
   Info << "roughness:     " << rgh << endl;
   Info << "dHurst:        " << dHurst << endl;
-  Info << "cutLen:        " << cutLen << endl;
-  Info << "maxDisp:       " << maxDisp << endl;
+  Info << "cutoff:        " << cutoff << endl;
   Info << "Setup RoughnessGenerator class" << endl;
 
-  RoughnessGenerator rg(seed, M, N, majLen, minLen, rgh, dHurst, cutLen,
-                        maxDisp, wayToApply);
+  RoughnessGenerator rg(seed, totalNum, center, direction,
+          radius, rgh, cutoff, dHurst, wayToApply);
 
   double cpuTime = runTime.elapsedCpuTime();
 
@@ -372,13 +281,15 @@ int main(int argc, char *argv[]) {
   forAll(motionN, ii) motionN[ii] /= mag(motionN[ii]);
 
   scalarField faceDisp(pointNface.size(), 0.0);
-  rg.getSurfaceDisplacement(mesh, faceDisp, patchID, majDir, minDir);
+  rg.getSurfaceDisplacement(mesh, faceDisp, patchID);
   scalarField pointDisp = patchInterpolator.faceToPointInterpolate(faceDisp);
 
+  /*
   forAll(pointDisp, i) {
-    pointDisp[i] = std::min(pointDisp[i], maxDisp);
+    pointDisp[i] = std::min(pointDisp[i],  maxDisp);
     pointDisp[i] = std::max(pointDisp[i], -maxDisp);
   }
+  */
 
   Info << "Maximum and minimum face displacements  " << max(faceDisp) << "  "
        << min(faceDisp) << endl;

@@ -1,0 +1,38 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2012                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      surfRoughGenDictCircle;
+}
+
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+/*
+    Methods: 
+        circle
+*/
+
+apply               circle;
+patchName           reactive_surface;
+
+center              (50 0 0.05);
+direction           (0 0 1); // normal to circle
+radius              2;
+totalNum            4000; // totoal number of points
+
+seed                513287;
+roughness           0.02;
+cutoff              100.0; // fraction of a circle length
+dHurst              0.1;
+
+// ************************************************************************* //
