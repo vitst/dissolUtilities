@@ -1,0 +1,15 @@
+#!/bin/bash
+
+echo "Copy local files to $WM_PROJECT_DIR"
+
+cp -r ./applications $WM_PROJECT_DIR/
+cp -r ./src $WM_PROJECT_DIR/
+
+pushd $WM_PROJECT_DIR/src
+./Allwmake 2>&1 | tee log.remake
+popd
+
+pushd $WM_PROJECT_DIR/applications
+./Allwmake 2>&1 | tee log.remake
+popd
+
