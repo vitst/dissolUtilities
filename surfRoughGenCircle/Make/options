@@ -14,4 +14,5 @@ EXE_LIBS = \
     -lsampling \
     -ldynamicMesh \
     -ldynamicFvMesh \
-    -L$(FFTW_ARCH_PATH)/lib64 -lfftw3
+    -L$(FFTW_ARCH_PATH)/lib64 -lfftw3 \
+    -L$(FFTW_ARCH_PATH)/lib -lfftw3
